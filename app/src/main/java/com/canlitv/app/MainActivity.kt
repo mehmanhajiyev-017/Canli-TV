@@ -49,9 +49,8 @@ class MainActivity : AppCompatActivity() {
         btnSaveUrl = findViewById(R.id.btnSaveUrl)
         recyclerView = findViewById(R.id.recyclerViewChannels)
 
-        // Bütün HTTP/HTTPS və IPTV axınlarını qəbul edən xüsusi şəbəkə konfiqurasiyası
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .setUserAgent("Mozilla/5.0")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(15000)
@@ -66,10 +65,9 @@ class MainActivity : AppCompatActivity() {
         playerView.player = player
         playerView.useController = false
 
-        // Xəta və ya yüklənmə vəziyyətini izləmək
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(this@MainActivity, "Kanal açılmadı: ${error.errorCodeName}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Kanal açılmadı", Toast.LENGTH_SHORT).show()
             }
         })
 
@@ -91,7 +89,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url)
             } else {
-                Toast.makeText(this, "Düzgün m3u linki daxil edin!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Düzgün link daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -111,10 +109,4 @@ class MainActivity : AppCompatActivity() {
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Pleylist yüklə
+            .header("
