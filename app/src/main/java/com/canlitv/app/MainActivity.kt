@@ -1,10 +1,14 @@
 package com.canlitv.app
 
+import android.content.Context
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
+import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -22,11 +26,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
     private lateinit var channelPanel: View
+    private lateinit var linkDialogPanel: View
+    private lateinit var etM3uUrl: EditText
+    private lateinit var btnSaveUrl: Button
     private lateinit var recyclerView: RecyclerView
     private val channelList = mutableListOf<Channel>()
-
-    // Bura öz M3U linkini qoya bilərsən:
-    private val M3U_URL = "https://example.com/channels.m3u"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +38,9 @@ class MainActivity : AppCompatActivity() {
 
         playerView = findViewById(R.id.playerView)
         channelPanel = findViewById(R.id.channelPanel)
+        linkDialogPanel = findViewById(R.id.linkDialogPanel)
+        etM3uUrl = findViewById(R.id.etM3uUrl)
+        btnSaveUrl = findViewById(R.id.btnSaveUrl)
         recyclerView = findViewById(R.id.recyclerViewChannels)
 
         player = ExoPlayer.Builder(this).build()
@@ -41,23 +48,58 @@ class MainActivity : AppCompatActivity() {
         playerView.useController = false
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        fetchM3U()
+
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        val savedUrl = prefs.getString("M3U_URL", "") ?: ""
+
+        if (savedUrl.isNotEmpty()) {
+            fetchM3U(savedUrl)
+        } else {
+            showLinkDialog()
+        }
+
+        btnSaveUrl.setOnClickListener {
+            val url = etM3uUrl.text.toString().trim()
+            if (url.isNotEmpty() && url.startsWith("http")) {
+                prefs.edit().putString("M3U_URL", url).apply()
+                linkDialogPanel.visibility = View.GONE
+                fetchM3U(url)
+            } else {
+                Toast.makeText(this, "Düzgün m3u linki daxil edin!", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
-    private fun fetchM3U() {
+    private fun showLinkDialog() {
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        etM3uUrl.setText(prefs.getString("M3U_URL", ""))
+        linkDialogPanel.visibility = View.VISIBLE
+        etM3uUrl.requestFocus()
+    }
+
+    private fun fetchM3U(url: String) {
         val client = OkHttpClient()
-        val request = Request.Builder().url(M3U_URL).build()
+        val request = Request.Builder().url(url).build()
 
         client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {}
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Yüklənmə xətası! Linki yoxlayın.", Toast.LENGTH_LONG).show()
+                    showLinkDialog()
+                }
+            }
 
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: return
+                channelList.clear()
                 parseM3U(body)
                 runOnUiThread {
                     setupAdapter()
                     if (channelList.isNotEmpty()) {
                         playChannel(channelList[0])
+                    } else {
+                        Toast.makeText(this@MainActivity, "Kanal tapılmadı!", Toast.LENGTH_SHORT).show()
+                        showLinkDialog()
                     }
                 }
             }
@@ -116,16 +158,31 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-            channelPanel.visibility = if (channelPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-            if (channelPanel.visibility == View.VISIBLE) {
-                recyclerView.requestFocus()
+            if (linkDialogPanel.visibility != View.VISIBLE) {
+                channelPanel.visibility = if (channelPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                if (channelPanel.visibility == View.VISIBLE) {
+                    recyclerView.requestFocus()
+                }
+                return true
             }
-            return true
-        } else if (keyCode == KeyEvent.KEYCODE_BACK && channelPanel.visibility == View.VISIBLE) {
-            channelPanel.visibility = View.GONE
-            return true
+        } else if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (channelPanel.visibility == View.VISIBLE) {
+                channelPanel.visibility = View.GONE
+                return true
+            } else if (linkDialogPanel.visibility == View.VISIBLE) {
+                linkDialogPanel.visibility = View.GONE
+                return true
+            }
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            showLinkDialog()
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
     }
 
     override fun onDestroy() {
