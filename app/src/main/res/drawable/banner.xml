@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Göy düzbucaqlı fon -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M0,0 L320,0 L320,180 L0,180 Z" />
+
+    <!-- Dizayn dalğası -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M0,0 L320,0 L320,90 L0,150 Z" />
+
+    <!-- Mərkəzdə TV çərçivəsi -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineJoin="round"
+        android:pathData="M110,48 L210,48 A8,8 0 0 1 218,56 L218,124 A8,8 0 0 1 210,132 L110,132 A8,8 0 0 1 102,124 L102,56 A8,8 0 0 1 110,48 Z" />
+
+    <!-- Antenalar -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M142,32 L160,48 L178,32" />
+
+    <!-- Ortada 'T' hərfi -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M125,68 L151,68 L151,76 L142,76 L142,112 L134,112 L134,76 L125,76 Z" />
+
+    <!-- Ortada 'V' hərfi -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M159,68 L168,68 L176,98 L184,68 L193,68 L181,112 L171,112 Z" />
+</vector>
