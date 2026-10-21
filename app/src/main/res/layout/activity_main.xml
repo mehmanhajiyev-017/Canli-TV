@@ -4,12 +4,14 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
+    <!-- Əsas Video Pleyer -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:keepScreenOn="true" />
 
+    <!-- Sol Tərəf: Kanal Siyahısı -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="340dp"
@@ -43,6 +45,7 @@
             android:focusable="true" />
     </LinearLayout>
 
+    <!-- Sağ Tərəf: Rəqəmli Axtarış Paneli -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="320dp"
@@ -75,6 +78,7 @@
             android:textSize="26sp"
             android:textStyle="bold" />
 
+        <!-- 1, 2, 3 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -84,6 +88,7 @@
             <Button android:id="@+id/btn3" style="@style/Widget.AppCompat.Button.Borderless" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="3" android:textColor="#FFF" android:textSize="20sp" />
         </LinearLayout>
 
+        <!-- 4, 5, 6 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -93,6 +98,7 @@
             <Button android:id="@+id/btn6" style="@style/Widget.AppCompat.Button.Borderless" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="6" android:textColor="#FFF" android:textSize="20sp" />
         </LinearLayout>
 
+        <!-- 7, 8, 9 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -102,6 +108,7 @@
             <Button android:id="@+id/btn9" style="@style/Widget.AppCompat.Button.Borderless" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="9" android:textColor="#FFF" android:textSize="20sp" />
         </LinearLayout>
 
+        <!-- C, 0, OK -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -112,52 +119,72 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Aşağı Hissə: Soldan Sağa BÜTÖV Şəffaf Panel (Xiaomi TV+ Stili) -->
     <LinearLayout
         android:id="@+id/infoBanner"
-        android:layout_width="550dp"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="35dp"
-        android:background="#D916181E"
+        android:layout_width="match_parent"
+        android:layout_height="110dp"
+        android:layout_gravity="bottom"
+        android:background="#E6101216"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="16dp"
+        android:paddingStart="40dp"
+        android:paddingEnd="40dp"
         android:visibility="gone">
 
+        <!-- Nömrə Kartı -->
         <TextView
             android:id="@+id/tvBannerNumber"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="#00E5FF"
-            android:paddingStart="12dp"
-            android:paddingTop="4dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="4dp"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
             android:text="001"
             android:textColor="#000000"
-            android:textSize="18sp"
+            android:textSize="22sp"
             android:textStyle="bold" />
 
+        <!-- Kanal Loqosu -->
         <ImageView
             android:id="@+id/imgBannerLogo"
-            android:layout_width="45dp"
-            android:layout_height="45dp"
-            android:layout_marginStart="14dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginStart="24dp"
             android:scaleType="fitCenter" />
 
-        <TextView
-            android:id="@+id/tvBannerName"
+        <!-- Kanal Adı və Canlı Yayın Yazısı -->
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_marginStart="20dp"
             android:layout_weight="1"
-            android:singleLine="true"
-            android:text="Kanal Adı"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvBannerName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:text="Kanal Adı"
+                android:textColor="#FFFFFF"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="● CANLI YAYIN"
+                android:textColor="#00E5FF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
+    <!-- M3U Link Daxil Etmə Pəncərəsi -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="500dp"
