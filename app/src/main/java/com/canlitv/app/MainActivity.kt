@@ -24,6 +24,7 @@ import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -101,24 +102,30 @@ class MainActivity : AppCompatActivity() {
 
         recyclerView.layoutManager = LinearLayoutManager(this)
 
+        btnSaveUrl.setOnClickListener {
+            val url = etM3uUrl.text.toString().trim()
+            if (url.isNotEmpty() && url.startsWith("http")) {
+                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                prefs.edit().putString("M3U_URL", url).apply()
+                linkDialogPanel.visibility = View.GONE
+                fetchM3U(url, autoPlayFirst = true)
+            } else {
+                Toast.makeText(applicationContext, "Düzgün link daxil edin", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Hər dəfə tətbiq açılanda və ya ön plana gələndə avtomatik pleylisti təzələyir
+    override fun onStart() {
+        super.onStart()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
         if (savedUrl.isNotEmpty()) {
-            fetchM3U(savedUrl)
+            val isFirstLaunch = channelList.isEmpty()
+            fetchM3U(savedUrl, autoPlayFirst = isFirstLaunch)
         } else {
             showLinkDialog()
-        }
-
-        btnSaveUrl.setOnClickListener {
-            val url = etM3uUrl.text.toString().trim()
-            if (url.isNotEmpty() && url.startsWith("http")) {
-                prefs.edit().putString("M3U_URL", url).apply()
-                linkDialogPanel.visibility = View.GONE
-                fetchM3U(url)
-            } else {
-                Toast.makeText(applicationContext, "Düzgün link daxil edin", Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
@@ -147,22 +154,26 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.requestFocus()
     }
 
-    private fun fetchM3U(url: String) {
+    private fun fetchM3U(url: String, autoPlayFirst: Boolean) {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
 
+        // Keş saxlamadan birbaşa ən son yenilənmiş pleylisti çəkir
         val request = Request.Builder()
             .url(url)
+            .cacheControl(CacheControl.FORCE_NETWORK)
             .header("User-Agent", "Mozilla/5.0")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
-                    Toast.makeText(applicationContext, "Pleylist yüklənmədi", Toast.LENGTH_LONG).show()
-                    showLinkDialog()
+                    if (channelList.isEmpty()) {
+                        Toast.makeText(applicationContext, "Pleylist yenilənmədi", Toast.LENGTH_SHORT).show()
+                        showLinkDialog()
+                    }
                 }
             }
 
@@ -174,7 +185,9 @@ class MainActivity : AppCompatActivity() {
                     tvTotalChannels.text = "${channelList.size} kanal mövcuddur"
                     setupAdapter()
                     if (channelList.isNotEmpty()) {
-                        playChannel(0)
+                        if (autoPlayFirst) {
+                            playChannel(0)
+                        }
                     } else {
                         Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
                         showLinkDialog()
