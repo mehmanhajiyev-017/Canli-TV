@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Göy dairəvi fon -->
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M54,4 C26.39,4 4,26.39 4,54 C4,81.61 26.39,104 54,104 C81.61,104 104,81.61 104,54 C104,26.39 81.61,4 54,4 Z" />
+
+    <!-- Açıq mavi kontur xətti -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#64B5F6"
+        android:strokeWidth="2.5"
+        android:pathData="M54,10 C29.7,10 10,29.7 10,54 C10,78.3 29.7,98 54,98 C78.3,98 98,78.3 98,54 C98,29.7 78.3,10 54,10 Z" />
+
+    <!-- Ağ rəngli TV çərçivəsi -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.5"
+        android:strokeLineJoin="round"
+        android:pathData="M26,36 L82,36 A5,5 0 0 1 87,41 L87,71 A5,5 0 0 1 82,76 L26,76 A5,5 0 0 1 21,71 L21,41 A5,5 0 0 1 26,36 Z" />
+
+    <!-- Televizorun üst antenaları -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M44,25 L54,36 L64,25" />
+
+    <!-- Ortada 'T' hərfi -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,46 L51,46 L51,51 L45.5,51 L45.5,67 L39.5,67 L39.5,51 L35,51 Z" />
+
+    <!-- Ortada 'V' hərfi -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,46 L60.5,46 L65,60.5 L69.5,46 L75,46 L68,67 L62,67 Z" />
+</vector>
