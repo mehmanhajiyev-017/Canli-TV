@@ -115,7 +115,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Hər dəfə tətbiq açılanda və ya ön plana gələndə avtomatik pleylisti təzələyir
     override fun onStart() {
         super.onStart()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
@@ -139,6 +138,7 @@ class MainActivity : AppCompatActivity() {
             findViewById<Button>(id).setOnClickListener { appendNumpadDigit(digit) }
         }
         findViewById<Button>(R.id.btnClear).setOnClickListener {
+            digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
             digitInputBuffer.clear()
             tvNumpadDisplay.text = "---"
         }
@@ -160,7 +160,6 @@ class MainActivity : AppCompatActivity() {
             .followSslRedirects(true)
             .build()
 
-        // Keş saxlamadan birbaşa ən son yenilənmiş pleylisti çəkir
         val request = Request.Builder()
             .url(url)
             .cacheControl(CacheControl.FORCE_NETWORK)
@@ -289,9 +288,40 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
+        // Rəqəmli axtarış paneli AÇIQDIRSA:
+        if (numPadPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+                    digitInputBuffer.clear()
+                    numPadPanel.visibility = View.GONE
+                    return true
+                }
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
+                    val digit = keyCode - KeyEvent.KEYCODE_0
+                    appendNumpadDigit(digit)
+                    return true
+                }
+                // Numpad daxilində oxların (sağ, sol, yuxarı, aşağı) və OK-un düymələr arası gəzməsinə icazə veririk
+                else -> return super.onKeyDown(keyCode, event)
+            }
+        }
+
+        // Kanal siyahısı AÇIQDIRSA:
+        if (channelPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    channelPanel.visibility = View.GONE
+                    return true
+                }
+                else -> return super.onKeyDown(keyCode, event)
+            }
+        }
+
+        // Heç bir panel açıq deyilsə (Yayım zamanı birbaşa pult):
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (channelPanel.visibility != View.VISIBLE && numPadPanel.visibility != View.VISIBLE && channelList.isNotEmpty()) {
+                if (channelList.isNotEmpty()) {
                     val nextIndex = (currentChannelIndex + 1) % channelList.size
                     playChannel(nextIndex)
                     return true
@@ -299,7 +329,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (channelPanel.visibility != View.VISIBLE && numPadPanel.visibility != View.VISIBLE && channelList.isNotEmpty()) {
+                if (channelList.isNotEmpty()) {
                     val prevIndex = if (currentChannelIndex - 1 < 0) channelList.size - 1 else currentChannelIndex - 1
                     playChannel(prevIndex)
                     return true
@@ -307,89 +337,20 @@ class MainActivity : AppCompatActivity() {
             }
 
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (numPadPanel.visibility == View.VISIBLE) numPadPanel.visibility = View.GONE
-
-                channelPanel.visibility = if (channelPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                if (channelPanel.visibility == View.VISIBLE) {
-                    recyclerView.requestFocus()
-                    recyclerView.scrollToPosition(currentChannelIndex)
-                }
+                channelPanel.visibility = View.VISIBLE
+                recyclerView.requestFocus()
+                recyclerView.scrollToPosition(currentChannelIndex)
                 return true
             }
 
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (channelPanel.visibility == View.VISIBLE) channelPanel.visibility = View.GONE
-
-                numPadPanel.visibility = if (numPadPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-                if (numPadPanel.visibility == View.VISIBLE) {
-                    digitInputBuffer.clear()
-                    tvNumpadDisplay.text = "---"
-                    findViewById<Button>(R.id.btn1).requestFocus()
-                }
+                numPadPanel.visibility = View.VISIBLE
+                digitInputBuffer.clear()
+                tvNumpadDisplay.text = "---"
+                findViewById<Button>(R.id.btn1).requestFocus()
                 return true
             }
 
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
                 val digit = keyCode - KeyEvent.KEYCODE_0
-                appendNumpadDigit(digit)
-                return true
-            }
-
-            KeyEvent.KEYCODE_BACK -> {
-                if (channelPanel.visibility == View.VISIBLE) {
-                    channelPanel.visibility = View.GONE
-                    return true
-                }
-                if (numPadPanel.visibility == View.VISIBLE) {
-                    numPadPanel.visibility = View.GONE
-                    return true
-                }
-            }
-        }
-
-        return super.onKeyDown(keyCode, event)
-    }
-
-    private fun appendNumpadDigit(digit: Int) {
-        if (digitInputBuffer.length >= 4) return
-        digitInputBuffer.append(digit)
-        tvNumpadDisplay.text = digitInputBuffer.toString()
-
-        if (numPadPanel.visibility != View.VISIBLE) {
-            numPadPanel.visibility = View.VISIBLE
-        }
-
-        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
-        val r = Runnable { executeNumpadSearch() }
-        digitAutoExecuteRunnable = r
-        handler.postDelayed(r, 2200)
-    }
-
-    private fun executeNumpadSearch() {
-        val targetNumber = digitInputBuffer.toString().toIntOrNull()
-        if (targetNumber != null) {
-            val foundIndex = channelList.indexOfFirst { it.number == targetNumber }
-            if (foundIndex != -1) {
-                playChannel(foundIndex)
-                numPadPanel.visibility = View.GONE
-            } else {
-                Toast.makeText(applicationContext, "Kanal $targetNumber tapılmadı", Toast.LENGTH_SHORT).show()
-                tvNumpadDisplay.text = "Tapılmadı"
-            }
-        }
-        digitInputBuffer.clear()
-    }
-
-    override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            showLinkDialog()
-            return true
-        }
-        return super.onKeyLongPress(keyCode, event)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        player.release()
-    }
-}
+                appendNump
