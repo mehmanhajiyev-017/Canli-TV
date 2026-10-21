@@ -4,19 +4,22 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
+    <!-- Əsas Video Pleyer -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:keepScreenOn="true" />
 
+    <!-- Sol tərəfdəki kanal siyahısı paneli -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="320dp"
         android:layout_height="match_parent"
         android:background="#CC111111"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="16dp"
+        android:visibility="gone">
 
         <TextView
             android:layout_width="wrap_content"
@@ -32,6 +35,47 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:focusable="true" />
+    </LinearLayout>
+
+    <!-- M3U Linki daxil etmə pəncərəsi -->
+    <LinearLayout
+        android:id="@+id/linkDialogPanel"
+        android:layout_width="480dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#DD212121"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="M3U Pleylist Linkini Daxil Edin"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/etM3uUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#333333"
+            android:hint="https://example.com/playlist.m3u"
+            android:inputType="textUri"
+            android:padding="12dp"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#888888" />
+
+        <Button
+            android:id="@+id/btnSaveUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:backgroundTint="#1E88E5"
+            android:text="Yadda Saxla və Başla"
+            android:textColor="#FFFFFF" />
     </LinearLayout>
 
 </FrameLayout>
