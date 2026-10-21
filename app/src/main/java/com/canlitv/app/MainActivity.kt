@@ -34,16 +34,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
     private lateinit var channelPanel: View
+    private lateinit var numPadPanel: View
+    private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
     private lateinit var etM3uUrl: EditText
     private lateinit var btnSaveUrl: Button
     private lateinit var recyclerView: RecyclerView
-    private val channelList = mutableListOf<Channel>()
+    private lateinit var tvTotalChannels: TextView
+    private lateinit var tvNumpadDisplay: TextView
+    private lateinit var tvBannerNumber: TextView
+    private lateinit var tvBannerName: TextView
+    private lateinit var imgBannerLogo: ImageView
 
+    private val channelList = mutableListOf<Channel>()
     private var currentChannelIndex = 0
     private val digitInputBuffer = StringBuilder()
     private val handler = Handler(Looper.getMainLooper())
-    private var digitRunnable: Runnable? = null
+    private var bannerRunnable: Runnable? = null
+    private var digitAutoExecuteRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,10 +59,19 @@ class MainActivity : AppCompatActivity() {
 
         playerView = findViewById(R.id.playerView)
         channelPanel = findViewById(R.id.channelPanel)
+        numPadPanel = findViewById(R.id.numPadPanel)
+        infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
         etM3uUrl = findViewById(R.id.etM3uUrl)
         btnSaveUrl = findViewById(R.id.btnSaveUrl)
         recyclerView = findViewById(R.id.recyclerViewChannels)
+        tvTotalChannels = findViewById(R.id.tvTotalChannels)
+        tvNumpadDisplay = findViewById(R.id.tvNumpadDisplay)
+        tvBannerNumber = findViewById(R.id.tvBannerNumber)
+        tvBannerName = findViewById(R.id.tvBannerName)
+        imgBannerLogo = findViewById(R.id.imgBannerLogo)
+
+        initNumpadButtons()
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0")
@@ -74,7 +91,7 @@ class MainActivity : AppCompatActivity() {
 
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(applicationContext, "Kanal açılmadı", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Yayım xətası", Toast.LENGTH_SHORT).show()
             }
         })
 
@@ -98,6 +115,24 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(applicationContext, "Düzgün link daxil edin", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun initNumpadButtons() {
+        val buttons = mapOf(
+            R.id.btn0 to 0, R.id.btn1 to 1, R.id.btn2 to 2, R.id.btn3 to 3,
+            R.id.btn4 to 4, R.id.btn5 to 5, R.id.btn6 to 6, R.id.btn7 to 7,
+            R.id.btn8 to 8, R.id.btn9 to 9
+        )
+        for ((id, digit) in buttons) {
+            findViewById<Button>(id).setOnClickListener { appendNumpadDigit(digit) }
+        }
+        findViewById<Button>(R.id.btnClear).setOnClickListener {
+            digitInputBuffer.clear()
+            tvNumpadDisplay.text = "---"
+        }
+        findViewById<Button>(R.id.btnGo).setOnClickListener {
+            executeNumpadSearch()
         }
     }
 
@@ -132,6 +167,7 @@ class MainActivity : AppCompatActivity() {
                 channelList.clear()
                 parseM3U(body)
                 runOnUiThread {
+                    tvTotalChannels.text = "${channelList.size} kanal mövcuddur"
                     setupAdapter()
                     if (channelList.isNotEmpty()) {
                         playChannel(0)
@@ -175,8 +211,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
                 val ch = channelList[position]
-                val formattedNumber = String.format("%03d", ch.number)
-                holder.itemView.findViewById<TextView>(R.id.tvNumber).text = formattedNumber
+                holder.itemView.findViewById<TextView>(R.id.tvNumber).text = String.format("%03d", ch.number)
                 holder.itemView.findViewById<TextView>(R.id.tvName).text = ch.name
                 val logoImg = holder.itemView.findViewById<ImageView>(R.id.imgLogo)
 
@@ -213,37 +248,53 @@ class MainActivity : AppCompatActivity() {
         player.prepare()
         player.playWhenReady = true
 
-        val formattedNumber = String.format("%03d", channel.number)
-        Toast.makeText(applicationContext, "$formattedNumber - ${channel.name}", Toast.LENGTH_SHORT).show()
+        showInfoBanner(channel)
     }
 
-    // Pultun Yumru D-Pad və Rəqəm düymələri ilə idarəetməsi
+    private fun showInfoBanner(channel: Channel) {
+        tvBannerNumber.text = String.format("%03d", channel.number)
+        tvBannerName.text = channel.name
+        if (channel.logoUrl.isNotEmpty()) {
+            Glide.with(this).load(channel.logoUrl).into(imgBannerLogo)
+        } else {
+            imgBannerLogo.setImageDrawable(null)
+        }
+
+        infoBanner.visibility = View.VISIBLE
+        bannerRunnable?.let { handler.removeCallbacks(it) }
+        bannerRunnable = Runnable { infoBanner.visibility = View.GONE }
+        handler.postDelayed(bannerRunnable!!, 3500)
+    }
+
+    // Pult İdarəetməsi: Yuxarı/Aşağı, Sol (Siyahı), Sağ (Rəqəmli Axtarış)
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (linkDialogPanel.visibility == View.VISIBLE) {
             return super.onKeyDown(keyCode, event)
         }
 
         when (keyCode) {
-            // Yuxarı ox: Sonrakı kanal (CH+)
+            // Yuxarı: Sonrakı kanal
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (channelPanel.visibility != View.VISIBLE && channelList.isNotEmpty()) {
+                if (channelPanel.visibility != View.VISIBLE && numPadPanel.visibility != View.VISIBLE && channelList.isNotEmpty()) {
                     val nextIndex = (currentChannelIndex + 1) % channelList.size
                     playChannel(nextIndex)
                     return true
                 }
             }
 
-            // Aşağı ox: Əvvəlki kanal (CH-)
+            // Aşağı: Əvvəlki kanal
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (channelPanel.visibility != View.VISIBLE && channelList.isNotEmpty()) {
+                if (channelPanel.visibility != View.VISIBLE && numPadPanel.visibility != View.VISIBLE && channelList.isNotEmpty()) {
                     val prevIndex = if (currentChannelIndex - 1 < 0) channelList.size - 1 else currentChannelIndex - 1
                     playChannel(prevIndex)
                     return true
                 }
             }
 
-            // Sol ox: Kanal siyahısını açır/bağlayır
+            // Sol Ox: Kanal siyahısını açır/bağlayır
             KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (numPadPanel.visibility == View.VISIBLE) numPadPanel.visibility = View.GONE
+
                 channelPanel.visibility = if (channelPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
                 if (channelPanel.visibility == View.VISIBLE) {
                     recyclerView.requestFocus()
@@ -252,14 +303,24 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // Sağ ox və ya OK: Kanal siyahısı bağlıdırsa menyunu açır
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                if (channelPanel.visibility == View.GONE) {
-                    channelPanel.visibility = View.VISIBLE
-                    recyclerView.requestFocus()
-                    recyclerView.scrollToPosition(currentChannelIndex)
-                    return true
+            // Sağ Ox: Rəqəmli Axtarış Panelini açır/bağlayır
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (channelPanel.visibility == View.VISIBLE) channelPanel.visibility = View.GONE
+
+                numPadPanel.visibility = if (numPadPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                if (numPadPanel.visibility == View.VISIBLE) {
+                    digitInputBuffer.clear()
+                    tvNumpadDisplay.text = "---"
+                    findViewById<Button>(R.id.btn1).requestFocus()
                 }
+                return true
+            }
+
+            // Pultun birbaşa rəqəm düymələri (0-9)
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
+                val digit = keyCode - KeyEvent.KEYCODE_0
+                appendNumpadDigit(digit)
+                return true
             }
 
             // Geri düyməsi
@@ -268,38 +329,43 @@ class MainActivity : AppCompatActivity() {
                     channelPanel.visibility = View.GONE
                     return true
                 }
-            }
-
-            // Pultdan rəqəmlər yığıldıqda birbaşa həmin kanala keçid (0–9)
-            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
-                val digit = keyCode - KeyEvent.KEYCODE_0
-                handleDigitInput(digit)
-                return true
+                if (numPadPanel.visibility == View.VISIBLE) {
+                    numPadPanel.visibility = View.GONE
+                    return true
+                }
             }
         }
 
         return super.onKeyDown(keyCode, event)
     }
 
-    private fun handleDigitInput(digit: Int) {
+    private fun appendNumpadDigit(digit: Int) {
+        if (digitInputBuffer.length >= 4) return
         digitInputBuffer.append(digit)
-        val channelQuery = digitInputBuffer.toString()
-        Toast.makeText(applicationContext, "Kanal: $channelQuery", Toast.LENGTH_SHORT).show()
+        tvNumpadDisplay.text = digitInputBuffer.toString()
 
-        digitRunnable?.let { handler.removeCallbacks(it) }
-        digitRunnable = Runnable {
-            val targetNumber = digitInputBuffer.toString().toIntOrNull()
-            if (targetNumber != null) {
-                val foundIndex = channelList.indexOfFirst { it.number == targetNumber }
-                if (foundIndex != -1) {
-                    playChannel(foundIndex)
-                } else {
-                    Toast.makeText(applicationContext, "Kanal $targetNumber tapılmadı", Toast.LENGTH_SHORT).show()
-                }
-            }
-            digitInputBuffer.clear()
+        if (numPadPanel.visibility != View.VISIBLE) {
+            numPadPanel.visibility = View.VISIBLE
         }
-        handler.postDelayed(digitRunnable!!, 2000) // 2 saniyə ərzində rəqəmi təsdiqləyir
+
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        digitAutoExecuteRunnable = Runnable { executeNumpadSearch() }
+        handler.postDelayed(digitAutoExecuteRunnable!, 2200)
+    }
+
+    private fun executeNumpadSearch() {
+        val targetNumber = digitInputBuffer.toString().toIntOrNull()
+        if (targetNumber != null) {
+            val foundIndex = channelList.indexOfFirst { it.number == targetNumber }
+            if (foundIndex != -1) {
+                playChannel(foundIndex)
+                numPadPanel.visibility = View.GONE
+            } else {
+                Toast.makeText(applicationContext, "Kanal $targetNumber tapılmadı", Toast.LENGTH_SHORT).show()
+                tvNumpadDisplay.text = "Tapılmadı"
+            }
+        }
+        digitInputBuffer.clear()
     }
 
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
