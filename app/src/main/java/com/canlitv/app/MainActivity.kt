@@ -280,7 +280,7 @@ class MainActivity : AppCompatActivity() {
         bannerRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { infoBanner.visibility = View.GONE }
         bannerRunnable = r
-        handler.postDelayed(r, 3500)
+        handler.postDelayed(r, 4000) // Ekranda 4 saniyə bütöv görünür
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -288,7 +288,7 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // Rəqəmli axtarış paneli AÇIQDIRSA:
+        // Rəqəmli axtarış paneli açıqdırsa
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -302,12 +302,11 @@ class MainActivity : AppCompatActivity() {
                     appendNumpadDigit(digit)
                     return true
                 }
-                // Numpad daxilində oxların (sağ, sol, yuxarı, aşağı) və OK-un düymələr arası gəzməsinə icazə veririk
                 else -> return super.onKeyDown(keyCode, event)
             }
         }
 
-        // Kanal siyahısı AÇIQDIRSA:
+        // Kanal siyahısı açıqdırsa
         if (channelPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -318,8 +317,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Heç bir panel açıq deyilsə (Yayım zamanı birbaşa pult):
+        // Normal yayım zamanı
         when (keyCode) {
+            // OK düyməsini sıxanda hazırkı kanalın bütöv məlumat banneri ekrana gəlir
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                if (channelList.isNotEmpty() && currentChannelIndex in channelList.indices) {
+                    showInfoBanner(channelList[currentChannelIndex])
+                    return true
+                }
+            }
+
+            // Yuxarı ox: Sonrakı kanal
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
                 if (channelList.isNotEmpty()) {
                     val nextIndex = (currentChannelIndex + 1) % channelList.size
@@ -328,6 +336,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            // Aşağı ox: Əvvəlki kanal
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                 if (channelList.isNotEmpty()) {
                     val prevIndex = if (currentChannelIndex - 1 < 0) channelList.size - 1 else currentChannelIndex - 1
@@ -336,6 +345,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            // Sol ox: Kanal siyahısını açır
             KeyEvent.KEYCODE_DPAD_LEFT -> {
                 channelPanel.visibility = View.VISIBLE
                 recyclerView.requestFocus()
@@ -343,6 +353,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
+            // Sağ ox: Rəqəmli axtarışı açır
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 numPadPanel.visibility = View.VISIBLE
                 digitInputBuffer.clear()
@@ -353,4 +364,57 @@ class MainActivity : AppCompatActivity() {
 
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
                 val digit = keyCode - KeyEvent.KEYCODE_0
-                appendNump
+                appendNumpadDigit(digit)
+                return true
+            }
+        }
+
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun appendNumpadDigit(digit: Int) {
+        if (digitInputBuffer.length >= 4) return
+        digitInputBuffer.append(digit)
+        tvNumpadDisplay.text = digitInputBuffer.toString()
+
+        if (numPadPanel.visibility != View.VISIBLE) {
+            numPadPanel.visibility = View.VISIBLE
+            findViewById<Button>(R.id.btn1).requestFocus()
+        }
+
+        // 5 saniyə sonra avtomatik təsdiq edir
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { executeNumpadSearch() }
+        digitAutoExecuteRunnable = r
+        handler.postDelayed(r, 5000)
+    }
+
+    private fun executeNumpadSearch() {
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        val targetNumber = digitInputBuffer.toString().toIntOrNull()
+        if (targetNumber != null) {
+            val foundIndex = channelList.indexOfFirst { it.number == targetNumber }
+            if (foundIndex != -1) {
+                playChannel(foundIndex)
+                numPadPanel.visibility = View.GONE
+            } else {
+                Toast.makeText(applicationContext, "Kanal $targetNumber tapılmadı", Toast.LENGTH_SHORT).show()
+                tvNumpadDisplay.text = "Tapılmadı"
+            }
+        }
+        digitInputBuffer.clear()
+    }
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            showLinkDialog()
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        player.release()
+    }
+}
