@@ -15,14 +15,16 @@
     android:paddingEnd="16dp"
     android:paddingBottom="12dp">
 
-    <!-- Sol: Kanal Nömrəsi -->
+    <!-- Sol: Kanal Nömrəsi (4-5 rəqəmli nömrələr üçün genişləndirildi və tək sətir edildi) -->
     <TextView
         android:id="@+id/tvNumber"
-        android:layout_width="45dp"
+        android:layout_width="64dp"
         android:layout_height="wrap_content"
+        android:singleLine="true"
+        android:ellipsize="none"
         android:text="1"
         android:textColor="#E0E0E0"
-        android:textSize="20sp"
+        android:textSize="19sp"
         android:textStyle="bold" />
 
     <!-- Kanalın Loqosu -->
@@ -30,7 +32,7 @@
         android:id="@+id/imgLogo"
         android:layout_width="42dp"
         android:layout_height="42dp"
-        android:layout_marginStart="6dp"
+        android:layout_marginStart="4dp"
         android:layout_marginEnd="12dp"
         android:scaleType="fitCenter" />
 
