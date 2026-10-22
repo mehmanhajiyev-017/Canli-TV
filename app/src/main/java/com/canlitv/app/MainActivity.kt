@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
     private lateinit var channelPanel: View
+    private lateinit var categoryPanel: View
     private lateinit var numPadPanel: View
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
@@ -47,6 +48,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerViewChannels: RecyclerView
     private lateinit var recyclerViewCategories: RecyclerView
     private lateinit var tvTotalChannels: TextView
+    private lateinit var tvTotalCategories: TextView
+    private lateinit var tvCurrentCategoryTitle: TextView
     private lateinit var tvNumpadDisplay: TextView
     private lateinit var tvBannerNumber: TextView
     private lateinit var tvBannerName: TextView
@@ -71,6 +74,7 @@ class MainActivity : AppCompatActivity() {
 
         playerView = findViewById(R.id.playerView)
         channelPanel = findViewById(R.id.channelPanel)
+        categoryPanel = findViewById(R.id.categoryPanel)
         numPadPanel = findViewById(R.id.numPadPanel)
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
@@ -79,6 +83,8 @@ class MainActivity : AppCompatActivity() {
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
         recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
         tvTotalChannels = findViewById(R.id.tvTotalChannels)
+        tvTotalCategories = findViewById(R.id.tvTotalCategories)
+        tvCurrentCategoryTitle = findViewById(R.id.tvCurrentCategoryTitle)
         tvNumpadDisplay = findViewById(R.id.tvNumpadDisplay)
         tvBannerNumber = findViewById(R.id.tvBannerNumber)
         tvBannerName = findViewById(R.id.tvBannerName)
@@ -111,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
-        recyclerViewCategories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        recyclerViewCategories.layoutManager = LinearLayoutManager(this)
 
         btnSaveUrl.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
@@ -220,6 +226,7 @@ class MainActivity : AppCompatActivity() {
                 parseM3U(body)
 
                 runOnUiThread {
+                    tvTotalCategories.text = "${categories.size} qrup mövcuddur"
                     setupCategoryAdapter()
                     filterChannels("Hamısı")
 
@@ -269,6 +276,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun filterChannels(category: String) {
         selectedCategory = category
+        tvCurrentCategoryTitle.text = category
         displayedChannels.clear()
 
         when (category) {
@@ -277,7 +285,7 @@ class MainActivity : AppCompatActivity() {
             else -> displayedChannels.addAll(allChannels.filter { it.category == category })
         }
 
-        tvTotalChannels.text = "${displayedChannels.size} kanal mövcuddur ($category)"
+        tvTotalChannels.text = "${displayedChannels.size} kanal mövcuddur"
         setupChannelAdapter()
     }
 
@@ -285,8 +293,8 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 val tv = TextView(this@MainActivity).apply {
-                    setPadding(24, 12, 24, 12)
-                    textSize = 14f
+                    setPadding(20, 18, 20, 18)
+                    textSize = 17f
                     isFocusable = true
                     isClickable = true
                     setBackgroundResource(android.R.drawable.btn_default)
@@ -304,14 +312,21 @@ class MainActivity : AppCompatActivity() {
                     tv.setTextColor(android.graphics.Color.WHITE)
                 }
 
+                // Qrupu seçəndə birbaşa həmin qrupun kanallarını açır və fokusu kanallara verir
                 tv.setOnClickListener {
-                    filterChannels(cat)
-                    notifyDataSetChanged()
+                    openChannelPanelWithCategory(cat)
                 }
             }
 
             override fun getItemCount() = categories.size
         }
+    }
+
+    private fun openChannelPanelWithCategory(cat: String) {
+        filterChannels(cat)
+        categoryPanel.visibility = View.GONE
+        channelPanel.visibility = View.VISIBLE
+        recyclerViewChannels.requestFocus()
     }
 
     private fun setupChannelAdapter() {
@@ -336,7 +351,6 @@ class MainActivity : AppCompatActivity() {
                     logoImg.setImageDrawable(null)
                 }
 
-                // Qısa toxunanda kanalı açır
                 holder.itemView.setOnClickListener {
                     val allIndex = allChannels.indexOf(ch)
                     if (allIndex != -1) {
@@ -345,7 +359,6 @@ class MainActivity : AppCompatActivity() {
                     channelPanel.visibility = View.GONE
                 }
 
-                // Üzərində sıxıb saxlayanda Seçilmişlərə (Favoritlərə) atır/çıxarır
                 holder.itemView.setOnLongClickListener {
                     toggleFavorite(ch)
                     true
@@ -397,11 +410,13 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(r, 4000)
     }
 
+    // ƏSAS PULT İDARƏETMƏSİ: Sola basdıqca pilləli keçid
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (linkDialogPanel.visibility == View.VISIBLE) {
             return super.onKeyDown(keyCode, event)
         }
 
+        // 1. Rəqəmli axtarış açıqdırsa
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -419,9 +434,38 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 2. Əgər KATEQORİYALAR paneli açıqdırsa:
+        if (categoryPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    categoryPanel.visibility = View.GONE
+                    return true
+                }
+                // Sağa basanda yenidən kanallar panelinə qayıdır
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    categoryPanel.visibility = View.GONE
+                    channelPanel.visibility = View.VISIBLE
+                    recyclerViewChannels.requestFocus()
+                    return true
+                }
+                else -> return super.onKeyDown(keyCode, event)
+            }
+        }
+
+        // 3. Əgər KANALLAR paneli açıqdırsa:
         if (channelPanel.visibility == View.VISIBLE) {
             when (keyCode) {
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                // Kanal siyahısındaykən SOLA basanda: KATEQORİYALAR açılır!
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    channelPanel.visibility = View.GONE
+                    categoryPanel.visibility = View.VISIBLE
+                    recyclerViewCategories.requestFocus()
+                    val catIndex = categories.indexOf(selectedCategory)
+                    if (catIndex != -1) recyclerViewCategories.scrollToPosition(catIndex)
+                    return true
+                }
+                // Kanal siyahısındaykən SAĞA basanda və ya GERİ basanda: Menyu bağlanır
+                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_BACK -> {
                     channelPanel.visibility = View.GONE
                     return true
                 }
@@ -429,8 +473,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 4. Normal Yayım zamanı:
         when (keyCode) {
-            // OK basanda cari kanal məlumatı çıxır
+            // OK basanda cari kanal məlumatı
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 if (allChannels.isNotEmpty() && currentPlayingIndexInAll in allChannels.indices) {
                     showInfoBanner(allChannels[currentPlayingIndexInAll])
@@ -456,7 +501,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Sol ox: Kanal siyahısını açır
+            // 1-ci DƏFƏ SOLA: Kanallar siyahısını açır
             KeyEvent.KEYCODE_DPAD_LEFT -> {
                 channelPanel.visibility = View.VISIBLE
                 filterChannels(selectedCategory)
@@ -464,7 +509,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // Sağ ox: Rəqəmli axtarış paneli
+            // SAĞA: Rəqəmli axtarış paneli
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 numPadPanel.visibility = View.VISIBLE
                 digitInputBuffer.clear()
