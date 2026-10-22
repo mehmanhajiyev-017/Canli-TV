@@ -3,45 +3,65 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="10dp"
+    android:paddingStart="16dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="12dp"
+    android:layout_marginBottom="6dp"
     android:gravity="center_vertical"
     android:focusable="true"
     android:clickable="true"
     android:background="?android:attr/selectableItemBackground">
 
+    <!-- Kanal Nömrəsi -->
     <TextView
         android:id="@+id/tvNumber"
-        android:layout_width="45dp"
+        android:layout_width="48dp"
         android:layout_height="wrap_content"
-        android:textColor="#FFB300"
-        android:textSize="17sp"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
+    <!-- Loqo (əgər varsa) -->
     <ImageView
         android:id="@+id/imgLogo"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:scaleType="fitCenter"
-        android:layout_marginStart="6dp" />
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginEnd="10dp"
+        android:scaleType="fitCenter" />
 
-    <TextView
-        android:id="@+id/tvName"
+    <!-- Kanal Adı və Altdakı Məlumat -->
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="12dp"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:singleLine="true" />
+        android:orientation="vertical">
 
-    <!-- Seçilmişlər Ulduzu -->
+        <TextView
+            android:id="@+id/tvName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Proqram məlumatı yoxdur"
+            android:textColor="#9E9E9E"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Ürək (Favorit) İkonu -->
     <TextView
-        android:id="@+id/tvFavIcon"
+        android:id="@+id/tvHeartIcon"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="★"
-        android:textColor="#FFD700"
-        android:textSize="18sp"
-        android:visibility="gone"
-        android:paddingEnd="6dp" />
+        android:text="♡"
+        android:textColor="#B0BEC5"
+        android:textSize="24sp"
+        android:paddingStart="12dp" />
 </LinearLayout>
