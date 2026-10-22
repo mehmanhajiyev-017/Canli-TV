@@ -35,6 +35,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
+// Version: 1.0.2
 data class Channel(val number: Int, val name: String, val logoUrl: String, val streamUrl: String, val category: String)
 
 class MainActivity : AppCompatActivity() {
@@ -213,6 +214,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleFavorite(channel: Channel) {
+        val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
             Toast.makeText(applicationContext, "${channel.name} удален из Избранного", Toast.LENGTH_SHORT).show()
@@ -221,7 +223,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
-        setupChannelAdapter()
+        recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
     }
 
     private fun initNumpadButtons() {
@@ -343,6 +345,57 @@ class MainActivity : AppCompatActivity() {
         setupChannelAdapter()
     }
 
+    // Функция для открытия списка ровно на текущем канале по центру экрана
+    private fun openChannelPanelCenteredOnCurrent() {
+        channelPanel.visibility = View.VISIBLE
+
+        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
+            filterChannels(selectedCategory)
+            recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+            return
+        }
+
+        val currentChannel = allChannels[currentPlayingIndexInAll]
+
+        // Если текущий канал не входит в выбранную категорию, переключаем фильтр на "Все", чтобы показать его
+        val inCurrentCat = when (selectedCategory) {
+            "Все" -> true
+            "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
+            else -> currentChannel.category == selectedCategory
+        }
+        if (!inCurrentCat) {
+            selectedCategory = "Все"
+        }
+
+        filterChannels(selectedCategory)
+        focusCurrentChannelCentered()
+    }
+
+    private fun focusCurrentChannelCentered() {
+        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) return
+        val currentChannel = allChannels[currentPlayingIndexInAll]
+        val targetPos = displayedChannels.indexOfFirst { it.number == currentChannel.number }.coerceAtLeast(0)
+
+        recyclerViewChannels.post {
+            val layoutManager = recyclerViewChannels.layoutManager as? LinearLayoutManager ?: return@post
+            // Вычисляем смещение так, чтобы выбранный канал оказался ровно посередине высоты списка
+            val itemHeightPx = (72 * resources.displayMetrics.density).toInt()
+            val centerOffset = (recyclerViewChannels.height / 2) - (itemHeightPx / 2)
+
+            layoutManager.scrollToPositionWithOffset(targetPos, centerOffset)
+
+            // Переводим фокус пульта прямо на этот центральный канал
+            recyclerViewChannels.post {
+                val holder = recyclerViewChannels.findViewHolderForAdapterPosition(targetPos)
+                if (holder != null) {
+                    holder.itemView.requestFocus()
+                } else {
+                    recyclerViewChannels.requestFocus()
+                }
+            }
+        }
+    }
+
     private fun setupCategoryAdapter() {
         recyclerViewCategories.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -425,14 +478,14 @@ class MainActivity : AppCompatActivity() {
                     filterChannels(cat)
                     categoryPanel.visibility = View.GONE
                     channelPanel.visibility = View.VISIBLE
-                    recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+                    focusCurrentChannelCentered()
                 }
 
                 row.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                         categoryPanel.visibility = View.GONE
                         channelPanel.visibility = View.VISIBLE
-                        recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+                        focusCurrentChannelCentered()
                         return@setOnKeyListener true
                     }
                     false
@@ -461,7 +514,6 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                // Loqonu yükləmək
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
                     Glide.with(this@MainActivity)
@@ -605,7 +657,7 @@ class MainActivity : AppCompatActivity() {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     categoryPanel.visibility = View.GONE
                     channelPanel.visibility = View.VISIBLE
-                    recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+                    focusCurrentChannelCentered()
                     return true
                 }
                 else -> return super.onKeyDown(keyCode, event)
@@ -652,10 +704,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            // При нажатии ВЛЕВО открываем список с текущим каналом строго посередине
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                channelPanel.visibility = View.VISIBLE
-                filterChannels(selectedCategory)
-                recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+                openChannelPanelCenteredOnCurrent()
                 return true
             }
 
