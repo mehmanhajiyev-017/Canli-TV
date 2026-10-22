@@ -95,7 +95,7 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
 
-        // Поиск düyməsi
+        // Кнопка поиска
         btnOpenSearch.setOnClickListener {
             categoryPanel.visibility = View.GONE
             channelPanel.visibility = View.GONE
@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
-        // Настройки düyməsi
+        // Кнопка настроек
         btnOpenSettings.setOnClickListener {
             categoryPanel.visibility = View.GONE
             channelPanel.visibility = View.GONE
