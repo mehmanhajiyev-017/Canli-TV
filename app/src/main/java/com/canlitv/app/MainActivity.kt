@@ -1,4 +1,4 @@
-package com.canlitv.app
+package com.livetv.hajiyev
 
 import android.content.Context
 import android.graphics.Color
@@ -54,7 +54,8 @@ data class Channel(
     val streamUrl: String,
     val category: String,
     val tvgId: String = "",
-    val tvgName: String = ""
+    val tvgName: String = "",
+    val cleanKey: String = ""
 )
 
 data class EpgProgram(
@@ -91,11 +92,12 @@ class MainActivity : AppCompatActivity() {
     private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
 
-    // EPG и Часовой пояс по IP
-    private var detectedTimeZone: TimeZone = TimeZone.getDefault()
+    private var detectedTimeZone: TimeZone = TimeZone.getTimeZone("GMT+04:00")
     private var m3uEmbeddedEpgUrl: String = ""
+
     private val epgProgramsByChannelId = ConcurrentHashMap<String, MutableList<EpgProgram>>()
-    private val epgChannelNameToId = ConcurrentHashMap<String, String>()
+    private val epgLookupToChannelId = ConcurrentHashMap<String, String>()
+    private val fallbackEpgUrl = "https://iptvx.one/epg/epg_lite.xml.gz"
 
     private var currentPlayingIndexInAll = 0
     private val digitInputBuffer = StringBuilder()
@@ -128,9 +130,7 @@ class MainActivity : AppCompatActivity() {
 
         loadFavorites()
         initNumpadButtons()
-
-        // Автоматически определяем часовой пояс по IP
-        detectTimeZoneByIp()
+        detectTimeZoneByIpHttps()
 
         btnOpenSearch.setOnClickListener {
             categoryPanel.visibility = View.GONE
@@ -236,38 +236,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Определение часового пояса по IP
-    private fun detectTimeZoneByIp() {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .build()
-
-        val request = Request.Builder()
-            .url("http://ip-api.com/json/?fields=status,timezone")
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
+    private fun detectTimeZoneByIpHttps() {
+        val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).build()
+        val request = Request.Builder().url("https://ipwho.is/").header("User-Agent", "Mozilla/5.0").build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {}
-
             override fun onResponse(call: Call, response: Response) {
                 try {
                     val body = response.body?.string() ?: return
                     val json = JSONObject(body)
-                    if (json.optString("status") == "success") {
-                        val tzId = json.optString("timezone", "")
+                    if (json.optBoolean("success", false)) {
+                        val tzId = json.optJSONObject("timezone")?.optString("id", "") ?: ""
                         if (tzId.isNotEmpty()) {
                             detectedTimeZone = TimeZone.getTimeZone(tzId)
                             TimeZone.setDefault(detectedTimeZone)
-                            runOnUiThread {
-                                recyclerViewChannels.adapter?.notifyDataSetChanged()
-                            }
+                            runOnUiThread { recyclerViewChannels.adapter?.notifyDataSetChanged() }
                         }
                     }
                 } catch (_: Exception) {}
             }
         })
+    }
+
+    private fun normalizeChannelName(raw: String): String {
+        var s = raw.lowercase(Locale.ROOT)
+        s = s.replace(Regex("\\[.*?]|\\(.*?\\)"), " ")
+        s = s.replace(Regex("\\b(hd|fhd|uhd|4k|sd|hevc|50fps|orig|ge|az|ru|tr|en|ua|kz|am|by|md|uz|tv|channel|канал)\\b"), " ")
+        return s.replace(Regex("[^a-zа-яё0-9əöüğışç]"), "")
     }
 
     private fun loadFavorites() {
@@ -291,9 +287,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
-        if (currentFocusPos != -1) {
-            recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
-        }
+        if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
     }
 
     private fun initNumpadButtons() {
@@ -310,9 +304,7 @@ class MainActivity : AppCompatActivity() {
             digitInputBuffer.clear()
             tvNumpadDisplay.text = "---"
         }
-        findViewById<Button>(R.id.btnGo).setOnClickListener {
-            executeNumpadSearch()
-        }
+        findViewById<Button>(R.id.btnGo).setOnClickListener { executeNumpadSearch() }
     }
 
     private fun showSettingsDialog() {
@@ -324,16 +316,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchM3U(url: String, autoPlayFirst: Boolean) {
-        val client = OkHttpClient.Builder()
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
-
-        val request = Request.Builder()
-            .url(url)
-            .cacheControl(CacheControl.FORCE_NETWORK)
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
+        val client = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true).build()
+        val request = Request.Builder().url(url).cacheControl(CacheControl.FORCE_NETWORK).header("User-Agent", "Mozilla/5.0").build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -359,22 +343,21 @@ class MainActivity : AppCompatActivity() {
                     setupCategoryAdapter()
                     filterChannels("Все")
 
-                    if (allChannels.isNotEmpty()) {
-                        if (autoPlayFirst) {
-                            playChannelByAllIndex(0)
-                        }
-                    } else {
+                    if (allChannels.isNotEmpty() && autoPlayFirst) {
+                        playChannelByAllIndex(0)
+                    } else if (allChannels.isEmpty()) {
                         Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
 
-                    // Загружаем EPG из настроек или из заголовка M3U
                     val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
                     val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
-                    val targetEpgUrl = if (savedEpg.isNotEmpty()) savedEpg else m3uEmbeddedEpgUrl
-                    if (targetEpgUrl.isNotEmpty() && targetEpgUrl.startsWith("http")) {
-                        fetchEPG(targetEpgUrl)
+                    val targetEpgUrl = when {
+                        savedEpg.isNotEmpty() && savedEpg.startsWith("http") -> savedEpg
+                        m3uEmbeddedEpgUrl.isNotEmpty() && m3uEmbeddedEpgUrl.startsWith("http") -> m3uEmbeddedEpgUrl
+                        else -> fallbackEpgUrl
                     }
+                    fetchEPG(targetEpgUrl)
                 }
             }
         })
@@ -394,25 +377,13 @@ class MainActivity : AppCompatActivity() {
             if (trimmed.startsWith("#EXTM3U")) {
                 val epgRegex = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
                 val foundEpg = epgRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
-                if (foundEpg.isNotEmpty()) {
-                    m3uEmbeddedEpgUrl = foundEpg.split(",").first().trim()
-                }
+                if (foundEpg.isNotEmpty()) m3uEmbeddedEpgUrl = foundEpg.split(",").first().trim()
             } else if (trimmed.startsWith("#EXTINF")) {
-                val logoRegex = Regex("tvg-logo=\"([^\"]+)\"")
-                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
-
-                val idRegex = Regex("tvg-id=\"([^\"]+)\"")
-                currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
-
-                val nameRegex = Regex("tvg-name=\"([^\"]+)\"")
-                currentTvgName = nameRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
-
-                val groupRegex = Regex("group-title=\"([^\"]+)\"")
-                currentGroup = groupRegex.find(trimmed)?.groups?.get(1)?.value ?: "Общие"
-                if (currentGroup.isNotEmpty() && !categories.contains(currentGroup)) {
-                    categories.add(currentGroup)
-                }
-
+                currentLogo = Regex("tvg-logo=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                currentTvgId = Regex("tvg-id=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                currentTvgName = Regex("tvg-name=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                currentGroup = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: "Общие"
+                if (currentGroup.isNotEmpty() && !categories.contains(currentGroup)) categories.add(currentGroup)
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
                 val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
@@ -423,55 +394,41 @@ class MainActivity : AppCompatActivity() {
                         logoUrl = currentLogo,
                         streamUrl = trimmed,
                         category = currentGroup,
-                        tvgId = currentTvgId,
-                        tvgName = currentTvgName
+                        tvgId = currentTvgId.lowercase(Locale.ROOT),
+                        tvgName = currentTvgName.lowercase(Locale.ROOT),
+                        cleanKey = normalizeChannelName(name)
                     )
                 )
                 counter++
-                currentName = ""
-                currentLogo = ""
-                currentGroup = "Общие"
-                currentTvgId = ""
-                currentTvgName = ""
+                currentName = ""; currentLogo = ""; currentGroup = "Общие"; currentTvgId = ""; currentTvgName = ""
             }
         }
     }
 
-    // Скачивание и парсинг EPG (поддержка .xml и .xml.gz)
     private fun fetchEPG(epgUrl: String) {
-        val client = OkHttpClient.Builder()
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
-
-        val request = Request.Builder()
-            .url(epgUrl)
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
+        val client = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true).connectTimeout(30, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS).build()
+        val request = Request.Builder().url(epgUrl).header("User-Agent", "Mozilla/5.0").build()
 
         client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {}
+            override fun onFailure(call: Call, e: IOException) {
+                if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
+            }
 
             override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
+                    return
+                }
                 val bodyStream = response.body?.byteStream() ?: return
                 try {
-                    val buffered = BufferedInputStream(bodyStream)
+                    val buffered = BufferedInputStream(bodyStream, 65536)
                     buffered.mark(4)
                     val magic = ByteArray(2)
                     val readLen = buffered.read(magic)
                     buffered.reset()
 
-                    val isGzip = readLen == 2 &&
-                            (magic[0].toInt() and 0xFF) == 0x1f &&
-                            (magic[1].toInt() and 0xFF) == 0x8b
-
-                    val xmlStream: InputStream = if (isGzip || epgUrl.endsWith(".gz", ignoreCase = true)) {
-                        GZIPInputStream(buffered)
-                    } else {
-                        buffered
-                    }
+                    val isGzip = readLen == 2 && (magic[0].toInt() and 0xFF) == 0x1f && (magic[1].toInt() and 0xFF) == 0x8b
+                    val xmlStream: InputStream = if (isGzip) GZIPInputStream(buffered, 65536) else buffered
 
                     parseEpgXmlStream(xmlStream)
 
@@ -482,34 +439,36 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } catch (_: Exception) {
+                    if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
                 } finally {
-                    try {
-                        bodyStream.close()
-                    } catch (_: Exception) {}
+                    try { bodyStream.close() } catch (_: Exception) {}
                 }
             }
         })
     }
 
     private fun parseEpgXmlStream(inputStream: InputStream) {
-        val validChannelIds = HashSet<String>()
-        val validNames = HashSet<String>()
+        val neededIds = HashSet<String>()
+        val neededCleanKeys = HashMap<String, MutableList<Channel>>()
+
         for (ch in allChannels) {
-            if (ch.tvgId.isNotEmpty()) validChannelIds.add(ch.tvgId.lowercase(Locale.ROOT))
-            if (ch.tvgName.isNotEmpty()) validNames.add(ch.tvgName.lowercase(Locale.ROOT))
-            validNames.add(ch.name.lowercase(Locale.ROOT))
+            if (ch.tvgId.isNotEmpty()) neededIds.add(ch.tvgId)
+            if (ch.cleanKey.isNotEmpty()) neededCleanKeys.getOrPut(ch.cleanKey) { mutableListOf() }.add(ch)
+            val exactLower = ch.name.lowercase(Locale.ROOT)
+            neededCleanKeys.getOrPut(exactLower) { mutableListOf() }.add(ch)
+            if (ch.tvgName.isNotEmpty()) neededCleanKeys.getOrPut(ch.tvgName) { mutableListOf() }.add(ch)
         }
 
         val now = System.currentTimeMillis()
-        val minTime = now - 6 * 3600 * 1000L
-        val maxTime = now + 18 * 3600 * 1000L
+        val minTime = now - 4 * 3600 * 1000L
+        val maxTime = now + 12 * 3600 * 1000L
 
         val parser = Xml.newPullParser()
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
         parser.setInput(inputStream, null)
 
         var eventType = parser.eventType
-        var currentChannelId = ""
+        var currentXmlChannelId = ""
         var inChannel = false
         var inProgramme = false
         var progChannel = ""
@@ -523,24 +482,32 @@ class MainActivity : AppCompatActivity() {
                     when (parser.name) {
                         "channel" -> {
                             inChannel = true
-                            currentChannelId = parser.getAttributeValue(null, "id") ?: ""
+                            currentXmlChannelId = (parser.getAttributeValue(null, "id") ?: "").lowercase(Locale.ROOT)
+                            if (neededIds.contains(currentXmlChannelId)) {
+                                epgLookupToChannelId[currentXmlChannelId] = currentXmlChannelId
+                            }
                         }
                         "display-name" -> {
-                            if (inChannel && currentChannelId.isNotEmpty()) {
-                                val dName = parser.nextText().trim().lowercase(Locale.ROOT)
-                                if (validNames.contains(dName)) {
-                                    epgChannelNameToId[dName] = currentChannelId.lowercase(Locale.ROOT)
-                                    validChannelIds.add(currentChannelId.lowercase(Locale.ROOT))
+                            if (inChannel && currentXmlChannelId.isNotEmpty()) {
+                                val rawDisplay = parser.nextText().trim()
+                                val lowerDisplay = rawDisplay.lowercase(Locale.ROOT)
+                                val cleanDisplay = normalizeChannelName(rawDisplay)
+
+                                if (neededCleanKeys.containsKey(lowerDisplay)) {
+                                    epgLookupToChannelId[lowerDisplay] = currentXmlChannelId
+                                    neededIds.add(currentXmlChannelId)
+                                }
+                                if (cleanDisplay.length >= 2 && neededCleanKeys.containsKey(cleanDisplay)) {
+                                    epgLookupToChannelId[cleanDisplay] = currentXmlChannelId
+                                    neededIds.add(currentXmlChannelId)
                                 }
                             }
                         }
                         "programme" -> {
                             val chAttr = (parser.getAttributeValue(null, "channel") ?: "").lowercase(Locale.ROOT)
-                            if (validChannelIds.contains(chAttr)) {
-                                val startStr = parser.getAttributeValue(null, "start") ?: ""
-                                val stopStr = parser.getAttributeValue(null, "stop") ?: ""
-                                val sTime = parseXmltvDate(startStr)
-                                val eTime = parseXmltvDate(stopStr)
+                            if (neededIds.contains(chAttr)) {
+                                val sTime = parseXmltvDate(parser.getAttributeValue(null, "start") ?: "")
+                                val eTime = parseXmltvDate(parser.getAttributeValue(null, "stop") ?: "")
                                 if (eTime > minTime && sTime < maxTime) {
                                     inProgramme = true
                                     progChannel = chAttr
@@ -559,14 +526,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 XmlPullParser.END_TAG -> {
                     when (parser.name) {
-                        "channel" -> {
-                            inChannel = false
-                            currentChannelId = ""
-                        }
+                        "channel" -> { inChannel = false; currentXmlChannelId = "" }
                         "programme" -> {
                             if (inProgramme && progTitle.isNotEmpty()) {
-                                val list = epgProgramsByChannelId.getOrPut(progChannel) { mutableListOf() }
-                                list.add(EpgProgram(progStart, progStop, progTitle))
+                                epgProgramsByChannelId.getOrPut(progChannel) { mutableListOf() }.add(EpgProgram(progStart, progStop, progTitle))
                             }
                             inProgramme = false
                         }
@@ -577,53 +540,47 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Разбор времени XMLTV с учётом часового пояса по IP
     private fun parseXmltvDate(raw: String): Long {
-        if (raw.length < 14) return 0L
+        val clean = raw.trim()
+        if (clean.length < 14) return 0L
         return try {
-            val clean = raw.trim()
             val datePart = clean.substring(0, 14)
-            val tzPart = clean.substring(14).trim()
+            val rest = clean.substring(14).trim()
 
-            val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-            sdf.timeZone = if (tzPart.isNotEmpty()) {
-                val formattedTz = if (tzPart.startsWith("+") || tzPart.startsWith("-")) {
-                    "GMT$tzPart"
-                } else {
-                    tzPart
-                }
-                TimeZone.getTimeZone(formattedTz)
+            val tz = if (rest.length >= 5 && (rest.startsWith("+") || rest.startsWith("-"))) {
+                TimeZone.getTimeZone("GMT${rest[0]}${rest.substring(1, 3)}:${rest.substring(3, 5)}")
             } else {
                 detectedTimeZone
             }
+
+            val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+            sdf.timeZone = tz
             sdf.parse(datePart)?.time ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        } catch (_: Exception) { 0L }
     }
 
     private fun getCurrentProgramText(channel: Channel): String {
         val now = System.currentTimeMillis()
-        val candidateIds = mutableListOf<String>()
+        val candidateXmlIds = LinkedHashSet<String>()
 
         if (channel.tvgId.isNotEmpty()) {
-            candidateIds.add(channel.tvgId.lowercase(Locale.ROOT))
+            candidateXmlIds.add(channel.tvgId)
+            epgLookupToChannelId[channel.tvgId]?.let { candidateXmlIds.add(it) }
         }
         if (channel.tvgName.isNotEmpty()) {
-            epgChannelNameToId[channel.tvgName.lowercase(Locale.ROOT)]?.let { candidateIds.add(it) }
+            epgLookupToChannelId[channel.tvgName]?.let { candidateXmlIds.add(it) }
         }
-        epgChannelNameToId[channel.name.lowercase(Locale.ROOT)]?.let { candidateIds.add(it) }
+        epgLookupToChannelId[channel.name.lowercase(Locale.ROOT)]?.let { candidateXmlIds.add(it) }
+        if (channel.cleanKey.isNotEmpty()) {
+            epgLookupToChannelId[channel.cleanKey]?.let { candidateXmlIds.add(it) }
+        }
 
-        for (cid in candidateIds) {
-            val programs = epgProgramsByChannelId[cid] ?: continue
+        for (xmlId in candidateXmlIds) {
+            val programs = epgProgramsByChannelId[xmlId] ?: continue
             val current = programs.firstOrNull { now in it.startMs..it.stopMs }
             if (current != null) {
-                val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).apply {
-                    timeZone = detectedTimeZone
-                }
-                val startStr = timeFmt.format(Date(current.startMs))
-                val stopStr = timeFmt.format(Date(current.stopMs))
-                return "$startStr - $stopStr  ${current.title}"
+                val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = detectedTimeZone }
+                return "${timeFmt.format(Date(current.startMs))} - ${timeFmt.format(Date(current.stopMs))}  ${current.title}"
             }
         }
         return "Нет информации о программе"
@@ -632,36 +589,28 @@ class MainActivity : AppCompatActivity() {
     private fun filterChannels(category: String) {
         selectedCategory = category
         displayedChannels.clear()
-
         when (category) {
             "Все" -> displayedChannels.addAll(allChannels)
             "Избранное" -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
             else -> displayedChannels.addAll(allChannels.filter { it.category == category })
         }
-
         setupChannelAdapter()
     }
 
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
-
         if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
             filterChannels(selectedCategory)
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
             return
         }
-
         val currentChannel = allChannels[currentPlayingIndexInAll]
-
         val inCurrentCat = when (selectedCategory) {
             "Все" -> true
             "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
             else -> currentChannel.category == selectedCategory
         }
-        if (!inCurrentCat) {
-            selectedCategory = "Все"
-        }
-
+        if (!inCurrentCat) selectedCategory = "Все"
         filterChannels(selectedCategory)
         focusCurrentChannelCentered()
     }
@@ -675,16 +624,11 @@ class MainActivity : AppCompatActivity() {
             val layoutManager = recyclerViewChannels.layoutManager as? LinearLayoutManager ?: return@post
             val itemHeightPx = (72 * resources.displayMetrics.density).toInt()
             val centerOffset = (recyclerViewChannels.height / 2) - (itemHeightPx / 2)
-
             layoutManager.scrollToPositionWithOffset(targetPos, centerOffset)
 
             recyclerViewChannels.post {
                 val holder = recyclerViewChannels.findViewHolderForAdapterPosition(targetPos)
-                if (holder != null) {
-                    holder.itemView.requestFocus()
-                } else {
-                    recyclerViewChannels.requestFocus()
-                }
+                if (holder != null) holder.itemView.requestFocus() else recyclerViewChannels.requestFocus()
             }
         }
     }
@@ -694,38 +638,15 @@ class MainActivity : AppCompatActivity() {
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 val row = LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    layoutParams = RecyclerView.LayoutParams(
-                        RecyclerView.LayoutParams.MATCH_PARENT,
-                        RecyclerView.LayoutParams.WRAP_CONTENT
-                    ).apply { setMargins(0, 4, 0, 6) }
+                    layoutParams = RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 4, 0, 6) }
                     setPadding(16, 12, 16, 12)
                     gravity = android.view.Gravity.CENTER_VERTICAL
-                    isFocusable = true
-                    isClickable = true
+                    isFocusable = true; isClickable = true
                 }
-
-                val iconView = TextView(this@MainActivity).apply {
-                    id = View.generateViewId()
-                    textSize = 17f
-                }
-                val titleView = TextView(this@MainActivity).apply {
-                    id = View.generateViewId()
-                    textSize = 15f
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        marginStart = 14
-                    }
-                }
-                val arrowView = TextView(this@MainActivity).apply {
-                    id = View.generateViewId()
-                    text = "›"
-                    textSize = 20f
-                }
-
-                row.addView(iconView)
-                row.addView(titleView)
-                row.addView(arrowView)
-
+                val iconView = TextView(this@MainActivity).apply { id = View.generateViewId(); textSize = 17f }
+                val titleView = TextView(this@MainActivity).apply { id = View.generateViewId(); textSize = 15f; typeface = android.graphics.Typeface.DEFAULT_BOLD; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 14 } }
+                val arrowView = TextView(this@MainActivity).apply { id = View.generateViewId(); text = "›"; textSize = 20f }
+                row.addView(iconView); row.addView(titleView); row.addView(arrowView)
                 return object : RecyclerView.ViewHolder(row) {}
             }
 
@@ -737,19 +658,10 @@ class MainActivity : AppCompatActivity() {
                 val arrowView = row.getChildAt(2) as TextView
 
                 titleView.text = cat
-                iconView.text = when (cat) {
-                    "Все" -> "☰"
-                    "Избранное" -> "★"
-                    else -> "📁"
-                }
+                iconView.text = when (cat) { "Все" -> "☰"; "Избранное" -> "★"; else -> "📁" }
 
-                val whiteBg = GradientDrawable().apply {
-                    setColor(Color.WHITE)
-                    cornerRadius = 24f
-                }
-                val transparentBg = GradientDrawable().apply {
-                    setColor(Color.TRANSPARENT)
-                }
+                val whiteBg = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = 24f }
+                val transparentBg = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
 
                 row.setOnFocusChangeListener { _, hasFocus ->
                     if (hasFocus) {
@@ -784,7 +696,6 @@ class MainActivity : AppCompatActivity() {
                     false
                 }
             }
-
             override fun getItemCount() = categories.size
         }
     }
@@ -792,8 +703,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupChannelAdapter() {
         recyclerViewChannels.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-                val v = layoutInflater.inflate(R.layout.item_channel, parent, false)
-                return object : RecyclerView.ViewHolder(v) {}
+                return object : RecyclerView.ViewHolder(layoutInflater.inflate(R.layout.item_channel, parent, false)) {}
             }
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -810,20 +720,13 @@ class MainActivity : AppCompatActivity() {
 
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
-                    Glide.with(this@MainActivity)
-                        .load(ch.logoUrl)
-                        .into(imgLogo)
+                    Glide.with(this@MainActivity).load(ch.logoUrl).into(imgLogo)
                 } else {
                     imgLogo.visibility = View.GONE
                 }
 
-                val cardFocusedBg = GradientDrawable().apply {
-                    setColor(Color.WHITE)
-                    cornerRadius = 14f
-                }
-                val cardDefaultBg = GradientDrawable().apply {
-                    setColor(Color.TRANSPARENT)
-                }
+                val cardFocusedBg = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = 14f }
+                val cardDefaultBg = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
 
                 row.setOnFocusChangeListener { _, hasFocus ->
                     if (hasFocus) {
@@ -841,16 +744,11 @@ class MainActivity : AppCompatActivity() {
 
                 row.setOnClickListener {
                     val allIndex = allChannels.indexOf(ch)
-                    if (allIndex != -1) {
-                        playChannelByAllIndex(allIndex)
-                    }
+                    if (allIndex != -1) playChannelByAllIndex(allIndex)
                     channelPanel.visibility = View.GONE
                 }
 
-                row.setOnLongClickListener {
-                    toggleFavorite(ch)
-                    true
-                }
+                row.setOnLongClickListener { toggleFavorite(ch); true }
 
                 row.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
@@ -860,12 +758,7 @@ class MainActivity : AppCompatActivity() {
                             val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
                             recyclerViewCategories.post {
                                 recyclerViewCategories.scrollToPosition(catIndex)
-                                val vHolder = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
-                                if (vHolder != null) {
-                                    vHolder.itemView.requestFocus()
-                                } else {
-                                    recyclerViewCategories.requestFocus()
-                                }
+                                recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)?.itemView?.requestFocus() ?: recyclerViewCategories.requestFocus()
                             }
                             return@setOnKeyListener true
                         } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
@@ -876,7 +769,6 @@ class MainActivity : AppCompatActivity() {
                     false
                 }
             }
-
             override fun getItemCount() = displayedChannels.size
         }
     }
@@ -888,10 +780,7 @@ class MainActivity : AppCompatActivity() {
 
         val streamUri = Uri.parse(channel.streamUrl)
         val mediaItem = if (channel.streamUrl.contains(".m3u8", ignoreCase = true)) {
-            MediaItem.Builder()
-                .setUri(streamUri)
-                .setMimeType(MimeTypes.APPLICATION_M3U8)
-                .build()
+            MediaItem.Builder().setUri(streamUri).setMimeType(MimeTypes.APPLICATION_M3U8).build()
         } else {
             MediaItem.fromUri(streamUri)
         }
@@ -899,7 +788,6 @@ class MainActivity : AppCompatActivity() {
         player.setMediaItem(mediaItem)
         player.prepare()
         player.playWhenReady = true
-
         showInfoBanner(channel)
     }
 
@@ -909,11 +797,7 @@ class MainActivity : AppCompatActivity() {
         val progText = getCurrentProgramText(channel)
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★ ИЗБРАННОЕ" else ""
 
-        tvBannerCategory.text = if (progText != "Нет информации о программе") {
-            "● $progText$isFav"
-        } else {
-            "● ${channel.category.uppercase()} — $progText$isFav"
-        }
+        tvBannerCategory.text = if (progText != "Нет информации о программе") "● $progText$isFav" else "● ${channel.category.uppercase()} — $progText$isFav"
 
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
@@ -924,59 +808,33 @@ class MainActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (linkDialogPanel.visibility == View.VISIBLE) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) {
-                linkDialogPanel.visibility = View.GONE
-                return true
-            }
+            if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
             return super.onKeyDown(keyCode, event)
         }
-
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
                     digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
-                    digitInputBuffer.clear()
-                    numPadPanel.visibility = View.GONE
-                    return true
+                    digitInputBuffer.clear(); numPadPanel.visibility = View.GONE; return true
                 }
-                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
-                    val digit = keyCode - KeyEvent.KEYCODE_0
-                    appendNumpadDigit(digit)
-                    return true
-                }
-                else -> return super.onKeyDown(keyCode, event)
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
             }
+            return super.onKeyDown(keyCode, event)
         }
-
         if (categoryPanel.visibility == View.VISIBLE) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_BACK -> {
-                    categoryPanel.visibility = View.GONE
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    categoryPanel.visibility = View.GONE
-                    channelPanel.visibility = View.VISIBLE
-                    focusCurrentChannelCentered()
-                    return true
-                }
-                else -> return super.onKeyDown(keyCode, event)
+            if (keyCode == KeyEvent.KEYCODE_BACK) { categoryPanel.visibility = View.GONE; return true }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                categoryPanel.visibility = View.GONE; channelPanel.visibility = View.VISIBLE; focusCurrentChannelCentered(); return true
             }
         }
-
         if (channelPanel.visibility == View.VISIBLE) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    channelPanel.visibility = View.GONE
-                    categoryPanel.visibility = View.VISIBLE
-                    recyclerViewCategories.post { recyclerViewCategories.requestFocus() }
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_BACK -> {
-                    channelPanel.visibility = View.GONE
-                    return true
-                }
-                else -> return super.onKeyDown(keyCode, event)
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                channelPanel.visibility = View.GONE; categoryPanel.visibility = View.VISIBLE
+                recyclerViewCategories.post { recyclerViewCategories.requestFocus() }
+                return true
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_BACK) {
+                channelPanel.visibility = View.GONE; return true
             }
         }
 
@@ -987,43 +845,23 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
             }
-
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (allChannels.isNotEmpty()) {
-                    val nextIndex = (currentPlayingIndexInAll + 1) % allChannels.size
-                    playChannelByAllIndex(nextIndex)
-                    return true
-                }
+                if (allChannels.isNotEmpty()) { playChannelByAllIndex((currentPlayingIndexInAll + 1) % allChannels.size); return true }
             }
-
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                 if (allChannels.isNotEmpty()) {
-                    val prevIndex = if (currentPlayingIndexInAll - 1 < 0) allChannels.size - 1 else currentPlayingIndexInAll - 1
-                    playChannelByAllIndex(prevIndex)
+                    playChannelByAllIndex(if (currentPlayingIndexInAll - 1 < 0) allChannels.size - 1 else currentPlayingIndexInAll - 1)
                     return true
                 }
             }
-
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                openChannelPanelCenteredOnCurrent()
-                return true
-            }
-
+            KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanelCenteredOnCurrent(); return true }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                numPadPanel.visibility = View.VISIBLE
-                digitInputBuffer.clear()
-                tvNumpadDisplay.text = "---"
+                numPadPanel.visibility = View.VISIBLE; digitInputBuffer.clear(); tvNumpadDisplay.text = "---"
                 findViewById<Button>(R.id.btn1).post { findViewById<Button>(R.id.btn1).requestFocus() }
                 return true
             }
-
-            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
-                val digit = keyCode - KeyEvent.KEYCODE_0
-                appendNumpadDigit(digit)
-                return true
-            }
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
         }
-
         return super.onKeyDown(keyCode, event)
     }
 
@@ -1031,12 +869,10 @@ class MainActivity : AppCompatActivity() {
         if (digitInputBuffer.length >= 4) return
         digitInputBuffer.append(digit)
         tvNumpadDisplay.text = digitInputBuffer.toString()
-
         if (numPadPanel.visibility != View.VISIBLE) {
             numPadPanel.visibility = View.VISIBLE
             findViewById<Button>(R.id.btn1).post { findViewById<Button>(R.id.btn1).requestFocus() }
         }
-
         digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { executeNumpadSearch() }
         digitAutoExecuteRunnable = r
@@ -1048,19 +884,11 @@ class MainActivity : AppCompatActivity() {
         val targetNumber = digitInputBuffer.toString().toIntOrNull()
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
-            if (foundIndex != -1) {
-                playChannelByAllIndex(foundIndex)
-                numPadPanel.visibility = View.GONE
-            } else {
-                Toast.makeText(applicationContext, "Канал $targetNumber не найден", Toast.LENGTH_SHORT).show()
-                tvNumpadDisplay.text = "Не найден"
-            }
+            if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
+            else { Toast.makeText(applicationContext, "Канал $targetNumber не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "Не найден" }
         }
         digitInputBuffer.clear()
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        player.release()
-    }
+    override fun onDestroy() { super.onDestroy(); player.release() }
 }
