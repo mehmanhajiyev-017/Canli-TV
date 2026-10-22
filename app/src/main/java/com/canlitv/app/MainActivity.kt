@@ -32,7 +32,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 
-data class Channel(val number: Int, val name: String, val logoUrl: String, val streamUrl: String)
+data class Channel(val number: Int, val name: String, val logoUrl: String, val streamUrl: String, val category: String)
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,15 +44,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var linkDialogPanel: View
     private lateinit var etM3uUrl: EditText
     private lateinit var btnSaveUrl: Button
-    private lateinit var recyclerView: RecyclerView
+    private lateinit var recyclerViewChannels: RecyclerView
+    private lateinit var recyclerViewCategories: RecyclerView
     private lateinit var tvTotalChannels: TextView
     private lateinit var tvNumpadDisplay: TextView
     private lateinit var tvBannerNumber: TextView
     private lateinit var tvBannerName: TextView
+    private lateinit var tvBannerCategory: TextView
     private lateinit var imgBannerLogo: ImageView
 
-    private val channelList = mutableListOf<Channel>()
-    private var currentChannelIndex = 0
+    private val allChannels = mutableListOf<Channel>()
+    private val displayedChannels = mutableListOf<Channel>()
+    private val categories = mutableListOf<String>()
+    private var selectedCategory = "Hamısı"
+    private val favoriteUrls = mutableSetOf<String>()
+
+    private var currentPlayingIndexInAll = 0
     private val digitInputBuffer = StringBuilder()
     private val handler = Handler(Looper.getMainLooper())
     private var bannerRunnable: Runnable? = null
@@ -69,13 +76,16 @@ class MainActivity : AppCompatActivity() {
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
         etM3uUrl = findViewById(R.id.etM3uUrl)
         btnSaveUrl = findViewById(R.id.btnSaveUrl)
-        recyclerView = findViewById(R.id.recyclerViewChannels)
+        recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
+        recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
         tvTotalChannels = findViewById(R.id.tvTotalChannels)
         tvNumpadDisplay = findViewById(R.id.tvNumpadDisplay)
         tvBannerNumber = findViewById(R.id.tvBannerNumber)
         tvBannerName = findViewById(R.id.tvBannerName)
+        tvBannerCategory = findViewById(R.id.tvBannerCategory)
         imgBannerLogo = findViewById(R.id.imgBannerLogo)
 
+        loadFavorites()
         initNumpadButtons()
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -100,7 +110,8 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerViewChannels.layoutManager = LinearLayoutManager(this)
+        recyclerViewCategories.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
 
         btnSaveUrl.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
@@ -121,11 +132,34 @@ class MainActivity : AppCompatActivity() {
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
         if (savedUrl.isNotEmpty()) {
-            val isFirstLaunch = channelList.isEmpty()
+            val isFirstLaunch = allChannels.isEmpty()
             fetchM3U(savedUrl, autoPlayFirst = isFirstLaunch)
         } else {
             showLinkDialog()
         }
+    }
+
+    private fun loadFavorites() {
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        favoriteUrls.clear()
+        favoriteUrls.addAll(prefs.getStringSet("FAVORITES", emptySet()) ?: emptySet())
+    }
+
+    private fun saveFavorites() {
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("FAVORITES", HashSet(favoriteUrls)).apply()
+    }
+
+    private fun toggleFavorite(channel: Channel) {
+        if (favoriteUrls.contains(channel.streamUrl)) {
+            favoriteUrls.remove(channel.streamUrl)
+            Toast.makeText(applicationContext, "${channel.name} Seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
+        } else {
+            favoriteUrls.add(channel.streamUrl)
+            Toast.makeText(applicationContext, "${channel.name} ★ Seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
+        }
+        saveFavorites()
+        filterChannels(selectedCategory)
     }
 
     private fun initNumpadButtons() {
@@ -169,7 +203,7 @@ class MainActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
-                    if (channelList.isEmpty()) {
+                    if (allChannels.isEmpty()) {
                         Toast.makeText(applicationContext, "Pleylist yenilənmədi", Toast.LENGTH_SHORT).show()
                         showLinkDialog()
                     }
@@ -178,14 +212,20 @@ class MainActivity : AppCompatActivity() {
 
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: return
-                channelList.clear()
+                allChannels.clear()
+                categories.clear()
+                categories.add("Hamısı")
+                categories.add("★ Seçilmişlər")
+
                 parseM3U(body)
+
                 runOnUiThread {
-                    tvTotalChannels.text = "${channelList.size} kanal mövcuddur"
-                    setupAdapter()
-                    if (channelList.isNotEmpty()) {
+                    setupCategoryAdapter()
+                    filterChannels("Hamısı")
+
+                    if (allChannels.isNotEmpty()) {
                         if (autoPlayFirst) {
-                            playChannel(0)
+                            playChannelByAllIndex(0)
                         }
                     } else {
                         Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
@@ -200,6 +240,7 @@ class MainActivity : AppCompatActivity() {
         val lines = content.lines()
         var currentName = ""
         var currentLogo = ""
+        var currentGroup = "Ümumi"
         var counter = 1
 
         for (line in lines) {
@@ -207,48 +248,118 @@ class MainActivity : AppCompatActivity() {
             if (trimmed.startsWith("#EXTINF")) {
                 val logoRegex = Regex("tvg-logo=\"([^\"]+)\"")
                 currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
+
+                val groupRegex = Regex("group-title=\"([^\"]+)\"")
+                currentGroup = groupRegex.find(trimmed)?.groups?.get(1)?.value ?: "Ümumi"
+                if (currentGroup.isNotEmpty() && !categories.contains(currentGroup)) {
+                    categories.add(currentGroup)
+                }
+
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
                 val name = if (currentName.isNotEmpty()) currentName else "Kanal $counter"
-                channelList.add(Channel(counter, name, currentLogo, trimmed))
+                allChannels.add(Channel(counter, name, currentLogo, trimmed, currentGroup))
                 counter++
                 currentName = ""
                 currentLogo = ""
+                currentGroup = "Ümumi"
             }
         }
     }
 
-    private fun setupAdapter() {
-        recyclerView.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private fun filterChannels(category: String) {
+        selectedCategory = category
+        displayedChannels.clear()
+
+        when (category) {
+            "Hamısı" -> displayedChannels.addAll(allChannels)
+            "★ Seçilmişlər" -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
+            else -> displayedChannels.addAll(allChannels.filter { it.category == category })
+        }
+
+        tvTotalChannels.text = "${displayedChannels.size} kanal mövcuddur ($category)"
+        setupChannelAdapter()
+    }
+
+    private fun setupCategoryAdapter() {
+        recyclerViewCategories.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val tv = TextView(this@MainActivity).apply {
+                    setPadding(24, 12, 24, 12)
+                    textSize = 14f
+                    isFocusable = true
+                    isClickable = true
+                    setBackgroundResource(android.R.drawable.btn_default)
+                }
+                return object : RecyclerView.ViewHolder(tv) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val cat = categories[position]
+                val tv = holder.itemView as TextView
+                tv.text = cat
+                if (cat == selectedCategory) {
+                    tv.setTextColor(android.graphics.Color.parseColor("#00E5FF"))
+                } else {
+                    tv.setTextColor(android.graphics.Color.WHITE)
+                }
+
+                tv.setOnClickListener {
+                    filterChannels(cat)
+                    notifyDataSetChanged()
+                }
+            }
+
+            override fun getItemCount() = categories.size
+        }
+    }
+
+    private fun setupChannelAdapter() {
+        recyclerViewChannels.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 val v = layoutInflater.inflate(R.layout.item_channel, parent, false)
                 return object : RecyclerView.ViewHolder(v) {}
             }
 
             override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-                val ch = channelList[position]
+                val ch = displayedChannels[position]
                 holder.itemView.findViewById<TextView>(R.id.tvNumber).text = String.format("%03d", ch.number)
                 holder.itemView.findViewById<TextView>(R.id.tvName).text = ch.name
                 val logoImg = holder.itemView.findViewById<ImageView>(R.id.imgLogo)
+                val favIcon = holder.itemView.findViewById<TextView>(R.id.tvFavIcon)
+
+                favIcon.visibility = if (favoriteUrls.contains(ch.streamUrl)) View.VISIBLE else View.GONE
 
                 if (ch.logoUrl.isNotEmpty()) {
                     Glide.with(this@MainActivity).load(ch.logoUrl).into(logoImg)
+                } else {
+                    logoImg.setImageDrawable(null)
                 }
 
+                // Qısa toxunanda kanalı açır
                 holder.itemView.setOnClickListener {
-                    playChannel(position)
+                    val allIndex = allChannels.indexOf(ch)
+                    if (allIndex != -1) {
+                        playChannelByAllIndex(allIndex)
+                    }
                     channelPanel.visibility = View.GONE
+                }
+
+                // Üzərində sıxıb saxlayanda Seçilmişlərə (Favoritlərə) atır/çıxarır
+                holder.itemView.setOnLongClickListener {
+                    toggleFavorite(ch)
+                    true
                 }
             }
 
-            override fun getItemCount() = channelList.size
+            override fun getItemCount() = displayedChannels.size
         }
     }
 
-    private fun playChannel(index: Int) {
-        if (index !in channelList.indices) return
-        currentChannelIndex = index
-        val channel = channelList[index]
+    private fun playChannelByAllIndex(index: Int) {
+        if (index !in allChannels.indices) return
+        currentPlayingIndexInAll = index
+        val channel = allChannels[index]
 
         val streamUri = Uri.parse(channel.streamUrl)
         val mediaItem = if (channel.streamUrl.contains(".m3u8", ignoreCase = true)) {
@@ -270,6 +381,9 @@ class MainActivity : AppCompatActivity() {
     private fun showInfoBanner(channel: Channel) {
         tvBannerNumber.text = String.format("%03d", channel.number)
         tvBannerName.text = channel.name
+        val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★ SEÇİLMİŞ" else ""
+        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
+
         if (channel.logoUrl.isNotEmpty()) {
             Glide.with(this).load(channel.logoUrl).into(imgBannerLogo)
         } else {
@@ -280,7 +394,7 @@ class MainActivity : AppCompatActivity() {
         bannerRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { infoBanner.visibility = View.GONE }
         bannerRunnable = r
-        handler.postDelayed(r, 4000) // Ekranda 4 saniyə bütöv görünür
+        handler.postDelayed(r, 4000)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -288,7 +402,6 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // Rəqəmli axtarış paneli açıqdırsa
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -306,7 +419,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Kanal siyahısı açıqdırsa
         if (channelPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -317,30 +429,29 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Normal yayım zamanı
         when (keyCode) {
-            // OK düyməsini sıxanda hazırkı kanalın bütöv məlumat banneri ekrana gəlir
+            // OK basanda cari kanal məlumatı çıxır
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                if (channelList.isNotEmpty() && currentChannelIndex in channelList.indices) {
-                    showInfoBanner(channelList[currentChannelIndex])
+                if (allChannels.isNotEmpty() && currentPlayingIndexInAll in allChannels.indices) {
+                    showInfoBanner(allChannels[currentPlayingIndexInAll])
                     return true
                 }
             }
 
-            // Yuxarı ox: Sonrakı kanal
+            // Yuxarı: Sonrakı kanal
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (channelList.isNotEmpty()) {
-                    val nextIndex = (currentChannelIndex + 1) % channelList.size
-                    playChannel(nextIndex)
+                if (allChannels.isNotEmpty()) {
+                    val nextIndex = (currentPlayingIndexInAll + 1) % allChannels.size
+                    playChannelByAllIndex(nextIndex)
                     return true
                 }
             }
 
-            // Aşağı ox: Əvvəlki kanal
+            // Aşağı: Əvvəlki kanal
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (channelList.isNotEmpty()) {
-                    val prevIndex = if (currentChannelIndex - 1 < 0) channelList.size - 1 else currentChannelIndex - 1
-                    playChannel(prevIndex)
+                if (allChannels.isNotEmpty()) {
+                    val prevIndex = if (currentPlayingIndexInAll - 1 < 0) allChannels.size - 1 else currentPlayingIndexInAll - 1
+                    playChannelByAllIndex(prevIndex)
                     return true
                 }
             }
@@ -348,12 +459,12 @@ class MainActivity : AppCompatActivity() {
             // Sol ox: Kanal siyahısını açır
             KeyEvent.KEYCODE_DPAD_LEFT -> {
                 channelPanel.visibility = View.VISIBLE
-                recyclerView.requestFocus()
-                recyclerView.scrollToPosition(currentChannelIndex)
+                filterChannels(selectedCategory)
+                recyclerViewChannels.requestFocus()
                 return true
             }
 
-            // Sağ ox: Rəqəmli axtarışı açır
+            // Sağ ox: Rəqəmli axtarış paneli
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 numPadPanel.visibility = View.VISIBLE
                 digitInputBuffer.clear()
@@ -382,7 +493,6 @@ class MainActivity : AppCompatActivity() {
             findViewById<Button>(R.id.btn1).requestFocus()
         }
 
-        // 5 saniyə sonra avtomatik təsdiq edir
         digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { executeNumpadSearch() }
         digitAutoExecuteRunnable = r
@@ -393,9 +503,9 @@ class MainActivity : AppCompatActivity() {
         digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
         val targetNumber = digitInputBuffer.toString().toIntOrNull()
         if (targetNumber != null) {
-            val foundIndex = channelList.indexOfFirst { it.number == targetNumber }
+            val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) {
-                playChannel(foundIndex)
+                playChannelByAllIndex(foundIndex)
                 numPadPanel.visibility = View.GONE
             } else {
                 Toast.makeText(applicationContext, "Kanal $targetNumber tapılmadı", Toast.LENGTH_SHORT).show()
