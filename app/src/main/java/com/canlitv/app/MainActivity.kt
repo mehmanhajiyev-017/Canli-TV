@@ -158,14 +158,14 @@ class MainActivity : AppCompatActivity() {
         btnOpenSettings.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 btnOpenSettings.setBackgroundColor(Color.WHITE)
-                (btnOpenSettings as LinearLayout).getChildAt(0).let { (it as TextView).setTextColor(Color.parseColor("#1E232B")) }
-                (btnOpenSettings as LinearLayout).getChildAt(1).let { (it as TextView).setTextColor(Color.parseColor("#1E232B")) }
-                (btnOpenSettings as LinearLayout).getChildAt(2).let { (it as TextView).setTextColor(Color.parseColor("#1E232B")) }
+                (btnOpenSettings as LinearLayout).getChildAt(0)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#1E232B")) }
+                (btnOpenSettings as LinearLayout).getChildAt(1)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#1E232B")) }
+                (btnOpenSettings as LinearLayout).getChildAt(2)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#1E232B")) }
             } else {
                 btnOpenSettings.setBackgroundColor(Color.parseColor("#252A34"))
-                (btnOpenSettings as LinearLayout).getChildAt(0).let { (it as TextView).setTextColor(Color.parseColor("#D8DEE9")) }
-                (btnOpenSettings as LinearLayout).getChildAt(1).let { (it as TextView).setTextColor(Color.WHITE) }
-                (btnOpenSettings as LinearLayout).getChildAt(2).let { (it as TextView).setTextColor(Color.parseColor("#78909C")) }
+                (btnOpenSettings as LinearLayout).getChildAt(0)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#D8DEE9")) }
+                (btnOpenSettings as LinearLayout).getChildAt(1)?.let { (it as? TextView)?.setTextColor(Color.WHITE) }
+                (btnOpenSettings as LinearLayout).getChildAt(2)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#78909C")) }
             }
         }
 
