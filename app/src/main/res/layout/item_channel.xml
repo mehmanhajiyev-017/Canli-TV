@@ -15,34 +15,29 @@
     android:paddingEnd="16dp"
     android:paddingBottom="12dp">
 
-    <!-- Sol: Təkcə Kanal Nömrəsi (Qıfıl silindi) -->
-    <LinearLayout
-        android:layout_width="48dp"
+    <!-- Sol: Kanal Nömrəsi -->
+    <TextView
+        android:id="@+id/tvNumber"
+        android:layout_width="45dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:text="1"
+        android:textColor="#E0E0E0"
+        android:textSize="20sp"
+        android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/tvNumber"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="1"
-            android:textColor="#E0E0E0"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <!-- Xəta verməməsi üçün gizli saxlanıldı -->
-        <TextView
-            android:id="@+id/tvBadges"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone" />
-    </LinearLayout>
+    <!-- Kanalın Loqosu -->
+    <ImageView
+        android:id="@+id/imgLogo"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="12dp"
+        android:scaleType="fitCenter" />
 
     <!-- Orta: Kanalın Adı və Proqram qeydi -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -66,13 +61,4 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Sağ: Ürək (Favorit) -->
-    <TextView
-        android:id="@+id/tvHeartIcon"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:paddingStart="12dp"
-        android:text="♡"
-        android:textColor="#78909C"
-        android:textSize="24sp" />
 </LinearLayout>
