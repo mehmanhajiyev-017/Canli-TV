@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -25,6 +26,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -95,7 +97,6 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
 
-        // Кнопка поиска
         btnOpenSearch.setOnClickListener {
             categoryPanel.visibility = View.GONE
             channelPanel.visibility = View.GONE
@@ -113,7 +114,6 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
-        // Кнопка настроек
         btnOpenSettings.setOnClickListener {
             categoryPanel.visibility = View.GONE
             channelPanel.visibility = View.GONE
@@ -393,7 +393,7 @@ class MainActivity : AppCompatActivity() {
                 titleView.text = cat
                 iconView.text = when (cat) {
                     "Все" -> "☰"
-                    "Избранное" -> "♡"
+                    "Избранное" -> "★"
                     else -> "📁"
                 }
 
@@ -454,17 +454,22 @@ class MainActivity : AppCompatActivity() {
                 val ch = displayedChannels[position]
                 val row = holder.itemView.findViewById<LinearLayout>(R.id.channelRowLayout)
                 val tvNum = holder.itemView.findViewById<TextView>(R.id.tvNumber)
-                val tvBadges = holder.itemView.findViewById<TextView>(R.id.tvBadges)
+                val imgLogo = holder.itemView.findViewById<ImageView>(R.id.imgLogo)
                 val tvName = holder.itemView.findViewById<TextView>(R.id.tvName)
                 val tvProg = holder.itemView.findViewById<TextView>(R.id.tvProgramInfo)
-                val tvHeart = holder.itemView.findViewById<TextView>(R.id.tvHeartIcon)
 
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                val isFav = favoriteUrls.contains(ch.streamUrl)
-                tvHeart.text = if (isFav) "♥" else "♡"
-                tvHeart.setTextColor(if (isFav) Color.parseColor("#E91E63") else Color.parseColor("#78909C"))
+                // Loqonu yükləmək
+                if (ch.logoUrl.isNotEmpty()) {
+                    imgLogo.visibility = View.VISIBLE
+                    Glide.with(this@MainActivity)
+                        .load(ch.logoUrl)
+                        .into(imgLogo)
+                } else {
+                    imgLogo.visibility = View.GONE
+                }
 
                 val cardFocusedBg = GradientDrawable().apply {
                     setColor(Color.WHITE)
@@ -479,18 +484,12 @@ class MainActivity : AppCompatActivity() {
                         row.background = cardFocusedBg
                         tvNum.setTextColor(Color.parseColor("#1E232B"))
                         tvName.setTextColor(Color.parseColor("#1E232B"))
-                        tvBadges.text = "••• 🔒"
-                        tvBadges.setTextColor(Color.parseColor("#4CAF50"))
                         tvProg.setTextColor(Color.parseColor("#5A6578"))
-                        if (!isFav) tvHeart.setTextColor(Color.parseColor("#1E232B"))
                     } else {
                         row.background = cardDefaultBg
                         tvNum.setTextColor(Color.parseColor("#E0E0E0"))
                         tvName.setTextColor(Color.WHITE)
-                        tvBadges.text = "••• 🔒"
-                        tvBadges.setTextColor(Color.parseColor("#78909C"))
                         tvProg.setTextColor(Color.parseColor("#78909C"))
-                        if (!isFav) tvHeart.setTextColor(Color.parseColor("#78909C"))
                     }
                 }
 
@@ -561,7 +560,7 @@ class MainActivity : AppCompatActivity() {
     private fun showInfoBanner(channel: Channel) {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
-        val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ♥ ИЗБРАННОЕ" else ""
+        val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★ ИЗБРАННОЕ" else ""
         tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
 
         infoBanner.visibility = View.VISIBLE
