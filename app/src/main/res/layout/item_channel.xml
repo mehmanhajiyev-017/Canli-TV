@@ -9,7 +9,6 @@
     android:clickable="true"
     android:background="?android:attr/selectableItemBackground">
 
-    <!-- Kanalın Sıra Rəqəmi (məs: 001) -->
     <TextView
         android:id="@+id/tvNumber"
         android:layout_width="45dp"
@@ -34,4 +33,15 @@
         android:textColor="#FFFFFF"
         android:textSize="16sp"
         android:singleLine="true" />
+
+    <!-- Seçilmişlər Ulduzu -->
+    <TextView
+        android:id="@+id/tvFavIcon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="★"
+        android:textColor="#FFD700"
+        android:textSize="18sp"
+        android:visibility="gone"
+        android:paddingEnd="6dp" />
 </LinearLayout>
