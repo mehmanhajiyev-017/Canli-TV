@@ -11,7 +11,7 @@
         android:layout_height="match_parent"
         android:keepScreenOn="true" />
 
-    <!-- 1-й Уровень: Панель категорий (Слева) -->
+    <!-- Панель категорий (Слева) -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="310dp"
@@ -48,7 +48,7 @@
             android:layout_weight="1"
             android:focusable="true" />
 
-        <!-- Кнопка Настройки внизу панели категорий -->
+        <!-- Кнопка Настройки внизу -->
         <LinearLayout
             android:id="@+id/btnOpenSettings"
             android:layout_width="match_parent"
@@ -87,7 +87,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 2-й Уровень: Панель каналов -->
+    <!-- Панель каналов -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="400dp"
@@ -206,7 +206,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Инфо-баннер -->
+    <!-- Инфо-баннер внизу -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -261,7 +261,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Окно настроек: Плейлист M3U и EPG -->
+    <!-- Диалог Настроек (M3U + EPG) -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="520dp"
