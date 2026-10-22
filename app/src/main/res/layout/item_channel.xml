@@ -15,7 +15,7 @@
     android:paddingEnd="16dp"
     android:paddingBottom="12dp">
 
-    <!-- Sol: Kanal Nömrəsi (4-5 rəqəmli nömrələr üçün genişləndirildi və tək sətir edildi) -->
+    <!-- Номер канала (расширен для 4-5 значных чисел) -->
     <TextView
         android:id="@+id/tvNumber"
         android:layout_width="64dp"
@@ -27,7 +27,7 @@
         android:textSize="19sp"
         android:textStyle="bold" />
 
-    <!-- Kanalın Loqosu -->
+    <!-- Логотип канала -->
     <ImageView
         android:id="@+id/imgLogo"
         android:layout_width="42dp"
@@ -36,7 +36,7 @@
         android:layout_marginEnd="12dp"
         android:scaleType="fitCenter" />
 
-    <!-- Orta: Kanalın Adı və Proqram qeydi -->
+    <!-- Название и программа передач -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
