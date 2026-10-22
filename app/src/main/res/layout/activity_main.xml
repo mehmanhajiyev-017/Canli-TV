@@ -4,19 +4,18 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Əsas Video Pleyer -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:keepScreenOn="true" />
 
-    <!-- Sol Tərəf: Kateqoriyalı Kanal Siyahısı -->
+    <!-- Sol Tərəf: 1-ci pillə - Kateqoriyalar Paneli -->
     <LinearLayout
-        android:id="@+id/channelPanel"
-        android:layout_width="380dp"
+        android:id="@+id/categoryPanel"
+        android:layout_width="280dp"
         android:layout_height="match_parent"
-        android:background="#E6121418"
+        android:background="#F0101216"
         android:orientation="vertical"
         android:padding="16dp"
         android:visibility="gone">
@@ -24,30 +23,55 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Canlı Kanallar"
-            android:textColor="#FFFFFF"
+            android:text="Qruplar"
+            android:textColor="#00E5FF"
             android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvTotalCategories"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="Kateqoriyalar"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewCategories"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <!-- Sol Tərəf: 2-ci pillə - Kanallar Paneli -->
+    <LinearLayout
+        android:id="@+id/channelPanel"
+        android:layout_width="340dp"
+        android:layout_height="match_parent"
+        android:background="#E6121418"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvCurrentCategoryTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hamısı"
+            android:textColor="#00E5FF"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvTotalChannels"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
+            android:layout_marginBottom="12dp"
             android:text="0 kanal mövcuddur"
             android:textColor="#888888"
             android:textSize="12sp" />
 
-        <!-- Kateqoriyalar Siyahısı (Üfüqi) -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerViewCategories"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:orientation="horizontal"
-            android:focusable="true" />
-
-        <!-- Kanallar Siyahısı (Şaquli) -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerViewChannels"
             android:layout_width="match_parent"
@@ -88,7 +112,6 @@
             android:textSize="26sp"
             android:textStyle="bold" />
 
-        <!-- 1, 2, 3 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -98,7 +121,6 @@
             <Button android:id="@+id/btn3" style="@style/Widget.AppCompat.Button.Borderless" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="3" android:textColor="#FFF" android:textSize="20sp" />
         </LinearLayout>
 
-        <!-- 4, 5, 6 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -108,7 +130,6 @@
             <Button android:id="@+id/btn6" style="@style/Widget.AppCompat.Button.Borderless" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="6" android:textColor="#FFF" android:textSize="20sp" />
         </LinearLayout>
 
-        <!-- 7, 8, 9 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -118,7 +139,6 @@
             <Button android:id="@+id/btn9" style="@style/Widget.AppCompat.Button.Borderless" android:layout_width="0dp" android:layout_height="50dp" android:layout_weight="1" android:text="9" android:textColor="#FFF" android:textSize="20sp" />
         </LinearLayout>
 
-        <!-- C, 0, OK -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -129,7 +149,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Aşağı Hissə: Bütöv Məlumat Paneli -->
+    <!-- Aşağı Hissə: Başdan-başa Bütöv Məlumat Zolağı -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
