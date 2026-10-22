@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.1" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/channelRowLayout"
     android:layout_width="match_parent"
@@ -15,7 +15,7 @@
     android:paddingEnd="16dp"
     android:paddingBottom="12dp">
 
-    <!-- Номер канала и значки -->
+    <!-- Sol: Təkcə Kanal Nömrəsi (Qıfıl silindi) -->
     <LinearLayout
         android:layout_width="48dp"
         android:layout_height="wrap_content"
@@ -30,17 +30,15 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
+        <!-- Xəta verməməsi üçün gizli saxlanıldı -->
         <TextView
             android:id="@+id/tvBadges"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="••• 🔒"
-            android:textColor="#78909C"
-            android:textSize="10sp" />
+            android:visibility="gone" />
     </LinearLayout>
 
-    <!-- Название канала и инфо о передаче -->
+    <!-- Orta: Kanalın Adı və Proqram qeydi -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -68,7 +66,7 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Иконка Избранного -->
+    <!-- Sağ: Ürək (Favorit) -->
     <TextView
         android:id="@+id/tvHeartIcon"
         android:layout_width="wrap_content"
