@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Xml
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Button
@@ -33,10 +34,34 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.json.JSONObject
+import org.xmlpull.v1.XmlPullParser
+import java.io.BufferedInputStream
 import java.io.IOException
+import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
 
-// Version: 1.0.2
-data class Channel(val number: Int, val name: String, val logoUrl: String, val streamUrl: String, val category: String)
+data class Channel(
+    val number: Int,
+    val name: String,
+    val logoUrl: String,
+    val streamUrl: String,
+    val category: String,
+    val tvgId: String = "",
+    val tvgName: String = ""
+)
+
+data class EpgProgram(
+    val startMs: Long,
+    val stopMs: Long,
+    val title: String
+)
 
 class MainActivity : AppCompatActivity() {
 
@@ -65,6 +90,12 @@ class MainActivity : AppCompatActivity() {
     private val categories = mutableListOf<String>()
     private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
+
+    // EPG и Часовой пояс по IP
+    private var detectedTimeZone: TimeZone = TimeZone.getDefault()
+    private var m3uEmbeddedEpgUrl: String = ""
+    private val epgProgramsByChannelId = ConcurrentHashMap<String, MutableList<EpgProgram>>()
+    private val epgChannelNameToId = ConcurrentHashMap<String, String>()
 
     private var currentPlayingIndexInAll = 0
     private val digitInputBuffer = StringBuilder()
@@ -97,6 +128,9 @@ class MainActivity : AppCompatActivity() {
 
         loadFavorites()
         initNumpadButtons()
+
+        // Автоматически определяем часовой пояс по IP
+        detectTimeZoneByIp()
 
         btnOpenSearch.setOnClickListener {
             categoryPanel.visibility = View.GONE
@@ -202,6 +236,40 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Определение часового пояса по IP
+    private fun detectTimeZoneByIp() {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder()
+            .url("http://ip-api.com/json/?fields=status,timezone")
+            .header("User-Agent", "Mozilla/5.0")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {}
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val body = response.body?.string() ?: return
+                    val json = JSONObject(body)
+                    if (json.optString("status") == "success") {
+                        val tzId = json.optString("timezone", "")
+                        if (tzId.isNotEmpty()) {
+                            detectedTimeZone = TimeZone.getTimeZone(tzId)
+                            TimeZone.setDefault(detectedTimeZone)
+                            runOnUiThread {
+                                recyclerViewChannels.adapter?.notifyDataSetChanged()
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        })
+    }
+
     private fun loadFavorites() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         favoriteUrls.clear()
@@ -223,7 +291,9 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
-        recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
+        if (currentFocusPos != -1) {
+            recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
+        }
     }
 
     private fun initNumpadButtons() {
@@ -281,6 +351,7 @@ class MainActivity : AppCompatActivity() {
                 categories.clear()
                 categories.add("Все")
                 categories.add("Избранное")
+                m3uEmbeddedEpgUrl = ""
 
                 parseM3U(body)
 
@@ -296,6 +367,14 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
+
+                    // Загружаем EPG из настроек или из заголовка M3U
+                    val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                    val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
+                    val targetEpgUrl = if (savedEpg.isNotEmpty()) savedEpg else m3uEmbeddedEpgUrl
+                    if (targetEpgUrl.isNotEmpty() && targetEpgUrl.startsWith("http")) {
+                        fetchEPG(targetEpgUrl)
+                    }
                 }
             }
         })
@@ -306,13 +385,27 @@ class MainActivity : AppCompatActivity() {
         var currentName = ""
         var currentLogo = ""
         var currentGroup = "Общие"
+        var currentTvgId = ""
+        var currentTvgName = ""
         var counter = 1
 
         for (line in lines) {
             val trimmed = line.trim()
-            if (trimmed.startsWith("#EXTINF")) {
+            if (trimmed.startsWith("#EXTM3U")) {
+                val epgRegex = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
+                val foundEpg = epgRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
+                if (foundEpg.isNotEmpty()) {
+                    m3uEmbeddedEpgUrl = foundEpg.split(",").first().trim()
+                }
+            } else if (trimmed.startsWith("#EXTINF")) {
                 val logoRegex = Regex("tvg-logo=\"([^\"]+)\"")
                 currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
+
+                val idRegex = Regex("tvg-id=\"([^\"]+)\"")
+                currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
+
+                val nameRegex = Regex("tvg-name=\"([^\"]+)\"")
+                currentTvgName = nameRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
 
                 val groupRegex = Regex("group-title=\"([^\"]+)\"")
                 currentGroup = groupRegex.find(trimmed)?.groups?.get(1)?.value ?: "Общие"
@@ -323,13 +416,217 @@ class MainActivity : AppCompatActivity() {
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
                 val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
-                allChannels.add(Channel(counter, name, currentLogo, trimmed, currentGroup))
+                allChannels.add(
+                    Channel(
+                        number = counter,
+                        name = name,
+                        logoUrl = currentLogo,
+                        streamUrl = trimmed,
+                        category = currentGroup,
+                        tvgId = currentTvgId,
+                        tvgName = currentTvgName
+                    )
+                )
                 counter++
                 currentName = ""
                 currentLogo = ""
                 currentGroup = "Общие"
+                currentTvgId = ""
+                currentTvgName = ""
             }
         }
+    }
+
+    // Скачивание и парсинг EPG (поддержка .xml и .xml.gz)
+    private fun fetchEPG(epgUrl: String) {
+        val client = OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder()
+            .url(epgUrl)
+            .header("User-Agent", "Mozilla/5.0")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {}
+
+            override fun onResponse(call: Call, response: Response) {
+                val bodyStream = response.body?.byteStream() ?: return
+                try {
+                    val buffered = BufferedInputStream(bodyStream)
+                    buffered.mark(4)
+                    val magic = ByteArray(2)
+                    val readLen = buffered.read(magic)
+                    buffered.reset()
+
+                    val isGzip = readLen == 2 &&
+                            (magic[0].toInt() and 0xFF) == 0x1f &&
+                            (magic[1].toInt() and 0xFF) == 0x8b
+
+                    val xmlStream: InputStream = if (isGzip || epgUrl.endsWith(".gz", ignoreCase = true)) {
+                        GZIPInputStream(buffered)
+                    } else {
+                        buffered
+                    }
+
+                    parseEpgXmlStream(xmlStream)
+
+                    runOnUiThread {
+                        recyclerViewChannels.adapter?.notifyDataSetChanged()
+                        if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
+                            showInfoBanner(allChannels[currentPlayingIndexInAll])
+                        }
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    try {
+                        bodyStream.close()
+                    } catch (_: Exception) {}
+                }
+            }
+        })
+    }
+
+    private fun parseEpgXmlStream(inputStream: InputStream) {
+        val validChannelIds = HashSet<String>()
+        val validNames = HashSet<String>()
+        for (ch in allChannels) {
+            if (ch.tvgId.isNotEmpty()) validChannelIds.add(ch.tvgId.lowercase(Locale.ROOT))
+            if (ch.tvgName.isNotEmpty()) validNames.add(ch.tvgName.lowercase(Locale.ROOT))
+            validNames.add(ch.name.lowercase(Locale.ROOT))
+        }
+
+        val now = System.currentTimeMillis()
+        val minTime = now - 6 * 3600 * 1000L
+        val maxTime = now + 18 * 3600 * 1000L
+
+        val parser = Xml.newPullParser()
+        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+        parser.setInput(inputStream, null)
+
+        var eventType = parser.eventType
+        var currentChannelId = ""
+        var inChannel = false
+        var inProgramme = false
+        var progChannel = ""
+        var progStart = 0L
+        var progStop = 0L
+        var progTitle = ""
+
+        while (eventType != XmlPullParser.END_DOCUMENT) {
+            when (eventType) {
+                XmlPullParser.START_TAG -> {
+                    when (parser.name) {
+                        "channel" -> {
+                            inChannel = true
+                            currentChannelId = parser.getAttributeValue(null, "id") ?: ""
+                        }
+                        "display-name" -> {
+                            if (inChannel && currentChannelId.isNotEmpty()) {
+                                val dName = parser.nextText().trim().lowercase(Locale.ROOT)
+                                if (validNames.contains(dName)) {
+                                    epgChannelNameToId[dName] = currentChannelId.lowercase(Locale.ROOT)
+                                    validChannelIds.add(currentChannelId.lowercase(Locale.ROOT))
+                                }
+                            }
+                        }
+                        "programme" -> {
+                            val chAttr = (parser.getAttributeValue(null, "channel") ?: "").lowercase(Locale.ROOT)
+                            if (validChannelIds.contains(chAttr)) {
+                                val startStr = parser.getAttributeValue(null, "start") ?: ""
+                                val stopStr = parser.getAttributeValue(null, "stop") ?: ""
+                                val sTime = parseXmltvDate(startStr)
+                                val eTime = parseXmltvDate(stopStr)
+                                if (eTime > minTime && sTime < maxTime) {
+                                    inProgramme = true
+                                    progChannel = chAttr
+                                    progStart = sTime
+                                    progStop = eTime
+                                    progTitle = ""
+                                }
+                            }
+                        }
+                        "title" -> {
+                            if (inProgramme && progTitle.isEmpty()) {
+                                progTitle = parser.nextText().trim()
+                            }
+                        }
+                    }
+                }
+                XmlPullParser.END_TAG -> {
+                    when (parser.name) {
+                        "channel" -> {
+                            inChannel = false
+                            currentChannelId = ""
+                        }
+                        "programme" -> {
+                            if (inProgramme && progTitle.isNotEmpty()) {
+                                val list = epgProgramsByChannelId.getOrPut(progChannel) { mutableListOf() }
+                                list.add(EpgProgram(progStart, progStop, progTitle))
+                            }
+                            inProgramme = false
+                        }
+                    }
+                }
+            }
+            eventType = parser.next()
+        }
+    }
+
+    // Разбор времени XMLTV с учётом часового пояса по IP
+    private fun parseXmltvDate(raw: String): Long {
+        if (raw.length < 14) return 0L
+        return try {
+            val clean = raw.trim()
+            val datePart = clean.substring(0, 14)
+            val tzPart = clean.substring(14).trim()
+
+            val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+            sdf.timeZone = if (tzPart.isNotEmpty()) {
+                val formattedTz = if (tzPart.startsWith("+") || tzPart.startsWith("-")) {
+                    "GMT$tzPart"
+                } else {
+                    tzPart
+                }
+                TimeZone.getTimeZone(formattedTz)
+            } else {
+                detectedTimeZone
+            }
+            sdf.parse(datePart)?.time ?: 0L
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    private fun getCurrentProgramText(channel: Channel): String {
+        val now = System.currentTimeMillis()
+        val candidateIds = mutableListOf<String>()
+
+        if (channel.tvgId.isNotEmpty()) {
+            candidateIds.add(channel.tvgId.lowercase(Locale.ROOT))
+        }
+        if (channel.tvgName.isNotEmpty()) {
+            epgChannelNameToId[channel.tvgName.lowercase(Locale.ROOT)]?.let { candidateIds.add(it) }
+        }
+        epgChannelNameToId[channel.name.lowercase(Locale.ROOT)]?.let { candidateIds.add(it) }
+
+        for (cid in candidateIds) {
+            val programs = epgProgramsByChannelId[cid] ?: continue
+            val current = programs.firstOrNull { now in it.startMs..it.stopMs }
+            if (current != null) {
+                val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).apply {
+                    timeZone = detectedTimeZone
+                }
+                val startStr = timeFmt.format(Date(current.startMs))
+                val stopStr = timeFmt.format(Date(current.stopMs))
+                return "$startStr - $stopStr  ${current.title}"
+            }
+        }
+        return "Нет информации о программе"
     }
 
     private fun filterChannels(category: String) {
@@ -345,7 +642,6 @@ class MainActivity : AppCompatActivity() {
         setupChannelAdapter()
     }
 
-    // Функция для открытия списка ровно на текущем канале по центру экрана
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
 
@@ -357,7 +653,6 @@ class MainActivity : AppCompatActivity() {
 
         val currentChannel = allChannels[currentPlayingIndexInAll]
 
-        // Если текущий канал не входит в выбранную категорию, переключаем фильтр на "Все", чтобы показать его
         val inCurrentCat = when (selectedCategory) {
             "Все" -> true
             "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
@@ -378,13 +673,11 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.post {
             val layoutManager = recyclerViewChannels.layoutManager as? LinearLayoutManager ?: return@post
-            // Вычисляем смещение так, чтобы выбранный канал оказался ровно посередине высоты списка
             val itemHeightPx = (72 * resources.displayMetrics.density).toInt()
             val centerOffset = (recyclerViewChannels.height / 2) - (itemHeightPx / 2)
 
             layoutManager.scrollToPositionWithOffset(targetPos, centerOffset)
 
-            // Переводим фокус пульта прямо на этот центральный канал
             recyclerViewChannels.post {
                 val holder = recyclerViewChannels.findViewHolderForAdapterPosition(targetPos)
                 if (holder != null) {
@@ -513,6 +806,7 @@ class MainActivity : AppCompatActivity() {
 
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
+                tvProg.text = getCurrentProgramText(ch)
 
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
@@ -612,8 +906,14 @@ class MainActivity : AppCompatActivity() {
     private fun showInfoBanner(channel: Channel) {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
+        val progText = getCurrentProgramText(channel)
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★ ИЗБРАННОЕ" else ""
-        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
+
+        tvBannerCategory.text = if (progText != "Нет информации о программе") {
+            "● $progText$isFav"
+        } else {
+            "● ${channel.category.uppercase()} — $progText$isFav"
+        }
 
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
@@ -704,7 +1004,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // При нажатии ВЛЕВО открываем список с текущим каналом строго посередине
             KeyEvent.KEYCODE_DPAD_LEFT -> {
                 openChannelPanelCenteredOnCurrent()
                 return true
