@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.livetv.hajiyev'
+    namespace 'com.canlitv.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.livetv.hajiyev"
+        applicationId "com.canlitv.app"
         minSdk 21
         targetSdk 34
         
