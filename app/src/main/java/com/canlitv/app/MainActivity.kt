@@ -44,6 +44,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
@@ -100,8 +101,9 @@ class MainActivity : AppCompatActivity() {
     private val fallbackEpgUrl = "https://iptvx.one/epg/epg_lite.xml.gz"
 
     private var currentPlayingIndexInAll = 0
-    private val digitInputBuffer = StringBuilder()
     private val handler = Handler(Looper.getMainLooper())
+    private val backgroundExecutor = Executors.newSingleThreadExecutor()
+    private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
 
@@ -195,7 +197,9 @@ class MainActivity : AppCompatActivity() {
 
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
+                runOnUiThread {
+                    Toast.makeText(applicationContext, "Canal axını bərpa olunur...", Toast.LENGTH_SHORT).show()
+                }
             }
         })
 
@@ -214,7 +218,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url, autoPlayFirst = true)
             } else {
-                Toast.makeText(applicationContext, "Введите корректную ссылку M3U", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Etibarlı M3U linki daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -281,10 +285,8 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} удален из Избранного", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
@@ -323,7 +325,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleyist yüklənmədi", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -346,7 +348,7 @@ class MainActivity : AppCompatActivity() {
                     if (allChannels.isNotEmpty() && autoPlayFirst) {
                         playChannelByAllIndex(0)
                     } else if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
 
@@ -420,28 +422,32 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
                 val bodyStream = response.body?.byteStream() ?: return
-                try {
-                    val buffered = BufferedInputStream(bodyStream, 65536)
-                    buffered.mark(4)
-                    val magic = ByteArray(2)
-                    val readLen = buffered.read(magic)
-                    buffered.reset()
+                
+                // EPG faylını fon axınında (background thread) oxuyuruq ki, TV donmasın
+                backgroundExecutor.execute {
+                    try {
+                        val buffered = BufferedInputStream(bodyStream, 65536)
+                        buffered.mark(4)
+                        val magic = ByteArray(2)
+                        val readLen = buffered.read(magic)
+                        buffered.reset()
 
-                    val isGzip = readLen == 2 && (magic[0].toInt() and 0xFF) == 0x1f && (magic[1].toInt() and 0xFF) == 0x8b
-                    val xmlStream: InputStream = if (isGzip) GZIPInputStream(buffered, 65536) else buffered
+                        val isGzip = readLen == 2 && (magic[0].toInt() and 0xFF) == 0x1f && (magic[1].toInt() and 0xFF) == 0x8b
+                        val xmlStream: InputStream = if (isGzip) GZIPInputStream(buffered, 65536) else buffered
 
-                    parseEpgXmlStream(xmlStream)
+                        parseEpgXmlStream(xmlStream)
 
-                    runOnUiThread {
-                        recyclerViewChannels.adapter?.notifyDataSetChanged()
-                        if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
-                            showInfoBanner(allChannels[currentPlayingIndexInAll])
+                        runOnUiThread {
+                            recyclerViewChannels.adapter?.notifyDataSetChanged()
+                            if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
+                                showInfoBanner(allChannels[currentPlayingIndexInAll])
+                            }
                         }
+                    } catch (_: Exception) {
+                        if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
+                    } finally {
+                        try { bodyStream.close() } catch (_: Exception) {}
                     }
-                } catch (_: Exception) {
-                    if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
-                } finally {
-                    try { bodyStream.close() } catch (_: Exception) {}
                 }
             }
         })
@@ -885,10 +891,14 @@ class MainActivity : AppCompatActivity() {
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
-            else { Toast.makeText(applicationContext, "Канал $targetNumber не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "Не найден" }
+            else { Toast.makeText(applicationContext, "Kanal $targetNumber tapılmadı", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "Tapılmadı" }
         }
         digitInputBuffer.clear()
     }
 
-    override fun onDestroy() { super.onDestroy(); player.release() }
+    override fun onDestroy() {
+        super.onDestroy()
+        backgroundExecutor.shutdown()
+        player.release()
+    }
 }
