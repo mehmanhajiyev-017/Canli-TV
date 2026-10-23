@@ -315,7 +315,6 @@ class MainActivity : AppCompatActivity() {
             override fun onResponse(call: Call, response: Response) {
                 val bodyStream = response.body?.byteStream() ?: return
 
-                // Потоковое чтение строк через BufferedReader (не нагружает память телевизора)
                 backgroundExecutor.execute {
                     val tempChannels = mutableListOf<Channel>()
                     val tempCategories = mutableSetOf<String>()
@@ -388,6 +387,24 @@ class MainActivity : AppCompatActivity() {
             else -> displayedChannels.addAll(allChannels.filter { it.category == category })
         }
         setupChannelAdapter()
+    }
+
+    private fun openChannelPanelCenteredOnCurrent() {
+        channelPanel.visibility = View.VISIBLE
+        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
+            filterChannels(selectedCategory)
+            recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+            return
+        }
+        val currentChannel = allChannels[currentPlayingIndexInAll]
+        val inCurrentCat = when (selectedCategory) {
+            "Все" -> true
+            "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
+            else -> currentChannel.category == selectedCategory
+        }
+        if (!inCurrentCat) selectedCategory = "Все"
+        filterChannels(selectedCategory)
+        focusCurrentChannelCentered()
     }
 
     private fun focusCurrentChannelCentered() {
