@@ -198,7 +198,7 @@ class MainActivity : AppCompatActivity() {
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 runOnUiThread {
-                    Toast.makeText(applicationContext, "Canal axını bərpa olunur...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "Axın bərpa olunur...", Toast.LENGTH_SHORT).show()
                 }
             }
         })
@@ -333,78 +333,84 @@ class MainActivity : AppCompatActivity() {
 
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: return
-                allChannels.clear()
-                categories.clear()
-                categories.add("Все")
-                categories.add("Избранное")
-                m3uEmbeddedEpgUrl = ""
+                
+                // M3U oxunması və emalı tamamilə fonda işləyir ki, TV donmasın
+                backgroundExecutor.execute {
+                    val tempChannels = mutableListOf<Channel>()
+                    val tempCategories = mutableSetOf<String>()
+                    tempCategories.add("Все")
+                    tempCategories.add("Избранное")
+                    var embeddedEpg = ""
 
-                parseM3U(body)
+                    val lines = body.lines()
+                    var currentName = ""
+                    var currentLogo = ""
+                    var currentGroup = "Общие"
+                    var currentTvgId = ""
+                    var currentTvgName = ""
+                    var counter = 1
 
-                runOnUiThread {
-                    setupCategoryAdapter()
-                    filterChannels("Все")
-
-                    if (allChannels.isNotEmpty() && autoPlayFirst) {
-                        playChannelByAllIndex(0)
-                    } else if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_SHORT).show()
-                        showSettingsDialog()
+                    for (line in lines) {
+                        val trimmed = line.trim()
+                        if (trimmed.startsWith("#EXTM3U")) {
+                            val epgRegex = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
+                            val foundEpg = epgRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
+                            if (foundEpg.isNotEmpty()) embeddedEpg = foundEpg.split(",").first().trim()
+                        } else if (trimmed.startsWith("#EXTINF")) {
+                            currentLogo = Regex("tvg-logo=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                            currentTvgId = Regex("tvg-id=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                            currentTvgName = Regex("tvg-name=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                            currentGroup = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: "Общие"
+                            if (currentGroup.isNotEmpty()) tempCategories.add(currentGroup)
+                            currentName = trimmed.substringAfterLast(",").trim()
+                        } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                            val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
+                            tempChannels.add(
+                                Channel(
+                                    number = counter,
+                                    name = name,
+                                    logoUrl = currentLogo,
+                                    streamUrl = trimmed,
+                                    category = currentGroup,
+                                    tvgId = currentTvgId.lowercase(Locale.ROOT),
+                                    tvgName = currentTvgName.lowercase(Locale.ROOT),
+                                    cleanKey = normalizeChannelName(name)
+                                )
+                            )
+                            counter++
+                            currentName = ""; currentLogo = ""; currentGroup = "Общие"; currentTvgId = ""; currentTvgName = ""
+                        }
                     }
 
-                    val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                    val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
-                    val targetEpgUrl = when {
-                        savedEpg.isNotEmpty() && savedEpg.startsWith("http") -> savedEpg
-                        m3uEmbeddedEpgUrl.isNotEmpty() && m3uEmbeddedEpgUrl.startsWith("http") -> m3uEmbeddedEpgUrl
-                        else -> fallbackEpgUrl
+                    runOnUiThread {
+                        allChannels.clear()
+                        allChannels.addAll(tempChannels)
+                        categories.clear()
+                        categories.addAll(tempCategories)
+                        m3uEmbeddedEpgUrl = embeddedEpg
+
+                        setupCategoryAdapter()
+                        filterChannels("Все")
+
+                        if (allChannels.isNotEmpty() && autoPlayFirst) {
+                            playChannelByAllIndex(0)
+                        } else if (allChannels.isEmpty()) {
+                            Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_SHORT).show()
+                            showSettingsDialog()
+                        }
+
+                        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                        val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
+                        val targetEpgUrl = when {
+                            savedEpg.isNotEmpty() && savedEpg.startsWith("http") -> savedEpg
+                            m3uEmbeddedEpgUrl.isNotEmpty() && m3uEmbeddedEpgUrl.startsWith("http") -> m3uEmbeddedEpgUrl
+                            else -> fallbackEpgUrl
+                        }
+                        fetchEPG(targetEpgUrl)
                     }
-                    fetchEPG(targetEpgUrl)
                 }
             }
         })
-    }
-
-    private fun parseM3U(content: String) {
-        val lines = content.lines()
-        var currentName = ""
-        var currentLogo = ""
-        var currentGroup = "Общие"
-        var currentTvgId = ""
-        var currentTvgName = ""
-        var counter = 1
-
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("#EXTM3U")) {
-                val epgRegex = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
-                val foundEpg = epgRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
-                if (foundEpg.isNotEmpty()) m3uEmbeddedEpgUrl = foundEpg.split(",").first().trim()
-            } else if (trimmed.startsWith("#EXTINF")) {
-                currentLogo = Regex("tvg-logo=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentTvgId = Regex("tvg-id=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentTvgName = Regex("tvg-name=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentGroup = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: "Общие"
-                if (currentGroup.isNotEmpty() && !categories.contains(currentGroup)) categories.add(currentGroup)
-                currentName = trimmed.substringAfterLast(",").trim()
-            } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-                val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
-                allChannels.add(
-                    Channel(
-                        number = counter,
-                        name = name,
-                        logoUrl = currentLogo,
-                        streamUrl = trimmed,
-                        category = currentGroup,
-                        tvgId = currentTvgId.lowercase(Locale.ROOT),
-                        tvgName = currentTvgName.lowercase(Locale.ROOT),
-                        cleanKey = normalizeChannelName(name)
-                    )
-                )
-                counter++
-                currentName = ""; currentLogo = ""; currentGroup = "Общие"; currentTvgId = ""; currentTvgName = ""
-            }
-        }
     }
 
     private fun fetchEPG(epgUrl: String) {
@@ -423,7 +429,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 val bodyStream = response.body?.byteStream() ?: return
                 
-                // EPG faylını fon axınında (background thread) oxuyuruq ki, TV donmasın
                 backgroundExecutor.execute {
                     try {
                         val buffered = BufferedInputStream(bodyStream, 65536)
