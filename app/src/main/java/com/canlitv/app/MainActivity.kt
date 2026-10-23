@@ -1,4 +1,4 @@
-package com.livetv.hajiyev
+package com.canlitv.app
 
 import android.content.Context
 import android.graphics.Color
@@ -52,7 +52,7 @@ data class Channel(
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var player: ExoPlayer
+    private var player: ExoPlayer? = null
     private lateinit var playerView: PlayerView
     private lateinit var channelPanel: View
     private lateinit var categoryPanel: View
@@ -169,18 +169,18 @@ class MainActivity : AppCompatActivity() {
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
-            .build()
+            .build().apply {
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        runOnUiThread {
+                            Toast.makeText(applicationContext, "Ошибка воспроизведения потока", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                })
+            }
 
         playerView.player = player
         playerView.useController = false
-
-        player.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                runOnUiThread {
-                    Toast.makeText(applicationContext, "Ошибка воспроизведения потока", Toast.LENGTH_SHORT).show()
-                }
-            }
-        })
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
@@ -577,9 +577,11 @@ class MainActivity : AppCompatActivity() {
             MediaItem.fromUri(streamUri)
         }
 
-        player.setMediaItem(mediaItem)
-        player.prepare()
-        player.playWhenReady = true
+        player?.let {
+            it.setMediaItem(mediaItem)
+            it.prepare()
+            it.playWhenReady = true
+        }
         showInfoBanner(channel)
     }
 
@@ -683,6 +685,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         backgroundExecutor.shutdown()
-        player.release()
+        player?.release()
+        player = null
     }
 }
