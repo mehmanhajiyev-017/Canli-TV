@@ -1,4 +1,4 @@
-package com.canlitv.app
+package com.livetv.hajiyev
 
 import android.content.Context
 import android.graphics.Color
