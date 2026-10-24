@@ -1,4 +1,4 @@
-package com.livetv.hajiyev
+package com.canlitv.app
 
 import android.content.Context
 import android.graphics.Color
@@ -102,6 +102,7 @@ class MainActivity : AppCompatActivity() {
     private val fallbackEpgUrl = "https://iptvx.one/epg/epg_lite.xml.gz"
 
     private var currentPlayingIndexInAll = 0
+    private var previousPlayingIndexInAll = -1
     private val handler = Handler(Looper.getMainLooper())
     private val backgroundExecutor = Executors.newSingleThreadExecutor()
     private val digitInputBuffer = StringBuilder()
@@ -807,6 +808,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
+        if (currentPlayingIndexInAll != index) {
+            previousPlayingIndexInAll = currentPlayingIndexInAll
+        }
         currentPlayingIndexInAll = index
         val channel = allChannels[index]
 
@@ -871,6 +875,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         when (keyCode) {
+            KeyEvent.KEYCODE_BACK -> {
+                if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
+                    playChannelByAllIndex(previousPlayingIndexInAll)
+                    return true
+                }
+            }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 if (allChannels.isNotEmpty() && currentPlayingIndexInAll in allChannels.indices) {
                     showInfoBanner(allChannels[currentPlayingIndexInAll])
