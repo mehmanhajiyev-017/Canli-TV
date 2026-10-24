@@ -101,14 +101,14 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
 
-        // Parlaq künclü Müasir TV Kökləmələr düyməsi
+        // Nastroyka düyməsinin fonu və işıqlı fokusu
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#1C222E"))
             cornerRadius = 14f
             setStroke(2, Color.parseColor("#2A3445"))
         }
         val settingsFocusedBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#2979FF")) // Parlaq Mavi fokus
+            setColor(Color.parseColor("#2979FF"))
             cornerRadius = 14f
             setStroke(3, Color.parseColor("#82B1FF"))
         }
@@ -317,7 +317,7 @@ class MainActivity : AppCompatActivity() {
                 if (currentGroup.isNotEmpty()) tempCategories.add(currentGroup)
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-                val name = if (currentName.isNotEmpty()) currentName else "Kanal $counter"
+                val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
                 tempChannels.add(
                     Channel(
                         number = counter,
@@ -398,14 +398,22 @@ class MainActivity : AppCompatActivity() {
                     isFocusable = true
                     isClickable = true
                 }
-                val iconView = TextView(this@MainActivity).apply { id = View.generateViewId(); textSize = 18sp() }
+                val iconView = TextView(this@MainActivity).apply { 
+                    id = View.generateViewId()
+                    textSize = 18f 
+                }
                 val titleView = TextView(this@MainActivity).apply {
                     id = View.generateViewId()
                     textSize = 15f
                     typeface = android.graphics.Typeface.DEFAULT_BOLD
                     layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 14 }
                 }
-                val arrowView = TextView(this@MainActivity).apply { id = View.generateViewId(); text = "›"; textSize = 18sp(); textStyleBold() }
+                val arrowView = TextView(this@MainActivity).apply { 
+                    id = View.generateViewId()
+                    text = "›"
+                    textSize = 18f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD 
+                }
                 row.addView(iconView); row.addView(titleView); row.addView(arrowView)
                 return object : RecyclerView.ViewHolder(row) {}
             }
@@ -424,9 +432,9 @@ class MainActivity : AppCompatActivity() {
                     else -> "📁"
                 }
 
-                // Parlaq TV İşıqlı Fokus Fonu (Neon Cyan / Deep Blue)
+                // Parlaq Mavi fokus fonu
                 val catFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#2979FF")) // Canlı işıqlı göy rəng
+                    setColor(Color.parseColor("#2979FF"))
                     cornerRadius = 14f
                     setStroke(3, Color.parseColor("#82B1FF"))
                 }
@@ -443,13 +451,11 @@ class MainActivity : AppCompatActivity() {
                         titleView.setTextColor(Color.WHITE)
                         iconView.setTextColor(Color.WHITE)
                         arrowView.setTextColor(Color.WHITE)
-                        arrowView.text = "›"
                     } else {
                         row.background = catDefaultBg
                         titleView.setTextColor(Color.parseColor("#CFD8DC"))
                         iconView.setTextColor(Color.parseColor("#78909C"))
                         arrowView.setTextColor(Color.parseColor("#546E7A"))
-                        arrowView.text = "›"
                     }
                 }
 
@@ -493,7 +499,7 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                if (favoriteUrls.contains(channelUrl(ch))) {
+                if (favoriteUrls.contains(ch.streamUrl)) {
                     tvFavStar.visibility = View.VISIBLE
                 } else {
                     tvFavStar.visibility = View.GONE
@@ -506,14 +512,14 @@ class MainActivity : AppCompatActivity() {
                     imgLogo.visibility = View.GONE
                 }
 
-                // Parlaq Seçim İşığı (Mavi / Neon Kontrastlı Kart)
+                // Seçilən kanal üçün parlaq göy fon və ağ kontur
                 val cardFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#2979FF")) // İşıqlı parlaq göy
+                    setColor(Color.parseColor("#2979FF"))
                     cornerRadius = 14f
-                    setStroke(3, Color.parseColor("#E0E0E0")) // Ağ parlaq çərçivə
+                    setStroke(3, Color.parseColor("#E0E0E0"))
                 }
                 val cardDefaultBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#151A22")) // Təmiz qaranlıq kart
+                    setColor(Color.parseColor("#151A22"))
                     cornerRadius = 14f
                 }
 
@@ -561,8 +567,6 @@ class MainActivity : AppCompatActivity() {
             override fun getItemCount() = displayedChannels.size
         }
     }
-
-    private fun channelUrl(ch: Channel): String = ch.streamUrl
 
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
@@ -690,12 +694,6 @@ class MainActivity : AppCompatActivity() {
         }
         digitInputBuffer.clear()
     }
-
-    private fun TextView.textStyleBold() {
-        this.typeface = android.graphics.Typeface.DEFAULT_BOLD
-    }
-
-    private fun sp(): Float = 17f
 
     override fun onDestroy() {
         super.onDestroy()
