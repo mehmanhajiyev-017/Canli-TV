@@ -263,8 +263,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -536,7 +536,6 @@ class MainActivity : AppCompatActivity() {
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
         
-        // Pultda GERİ (BACK) düyməsi üçün əvvəlki kanalı yaddaşa alırıq
         if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
             previousPlayingIndexInAll = currentPlayingIndexInAll
         }
@@ -604,7 +603,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         when (keyCode) {
-            // Pultda GERİ (BACK) basıldıqda əvvəlki baxılmış kanala qayıdır
             KeyEvent.KEYCODE_BACK -> {
                 if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
                     playChannelByAllIndex(previousPlayingIndexInAll)
