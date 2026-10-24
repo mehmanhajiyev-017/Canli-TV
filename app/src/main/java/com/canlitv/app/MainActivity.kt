@@ -742,7 +742,7 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                 if (allChannels.isNotEmpty()) {
                     playChannelByAllIndex(if (currentPlayingIndexInAll - 1 < 0) allChannels.size - 1 else currentPlayingIndexInAll - 1)
-                    return true
+                    return
                 }
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanelCenteredOnCurrent(); return true }
@@ -767,7 +767,7 @@ class MainActivity : AppCompatActivity() {
         digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { executeNumpadSearch() }
         digitAutoExecuteRunnable = r
-        handler.postdates(r, 5000)
+        handler.postDelayed(r, 5000)
     }
 
     private fun executeNumpadSearch() {
