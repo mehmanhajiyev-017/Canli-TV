@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
@@ -99,6 +100,22 @@ class MainActivity : AppCompatActivity() {
         tvBannerNumber = findViewById(R.id.tvBannerNumber)
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
+
+        // XML-ə toxunmadan "Поиск по номеру" düyməsini tamamilə yox edirik:
+        findViewById<View?>(R.id.btnOpenSearch)?.visibility = View.GONE
+
+        // XML-ə toxunmadan "Настройки" düyməsini tutub siyahının ƏN AŞAĞISINA salırıq:
+        (categoryPanel as? LinearLayout)?.let { panel ->
+            panel.removeView(btnOpenSettings)
+            val params = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (52 * resources.displayMetrics.density).toInt()
+            ).apply {
+                topMargin = (10 * resources.displayMetrics.density).toInt()
+            }
+            btnOpenSettings.layoutParams = params
+            panel.addView(btnOpenSettings)
+        }
 
         loadFavorites()
         initNumpadButtons()
@@ -342,20 +359,38 @@ class MainActivity : AppCompatActivity() {
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        val groupRegex = Regex("group-title=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-        val logoRegex = Regex("tvg-logo=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        // Bütün növ M3U formatlarını (dırnaqlı, tək dırnaqlı, #EXTGRP) oxuyan güclü Regex
+        val groupRegex = Regex("""group-title\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
+        val logoRegex = Regex("""tvg-logo\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
             val trimmed = line.trim()
             if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
-                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
-                val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
-                currentGroup = if (groupFound.isNotBlank()) groupFound else "Digər"
-                if (currentGroup.isNotEmpty()) tempCategories.add(currentGroup)
+                val logoMatch = logoRegex.find(trimmed)
+                currentLogo = (logoMatch?.groups?.get(1)?.value
+                    ?: logoMatch?.groups?.get(2)?.value
+                    ?: logoMatch?.groups?.get(3)?.value ?: "").trim()
+
+                val groupMatch = groupRegex.find(trimmed)
+                val groupFound = (groupMatch?.groups?.get(1)?.value
+                    ?: groupMatch?.groups?.get(2)?.value
+                    ?: groupMatch?.groups?.get(3)?.value ?: "").trim()
+
+                if (groupFound.isNotEmpty()) {
+                    currentGroup = groupFound
+                    tempCategories.add(currentGroup)
+                }
                 currentName = trimmed.substringAfterLast(",").trim()
-            } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            } else if (trimmed.startsWith("#EXTGRP:", ignoreCase = true)) {
+                val grp = trimmed.substringAfter(":").trim()
+                if (grp.isNotEmpty()) {
+                    currentGroup = grp
+                    tempCategories.add(currentGroup)
+                }
+            } else if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
                 val name = if (currentName.isNotEmpty()) currentName else "Kanal $counter"
                 val cat = if (currentGroup.isNotEmpty()) currentGroup else "Digər"
+                tempCategories.add(cat)
                 tempChannels.add(
                     Channel(
                         number = counter,
@@ -429,7 +464,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupCategoryAdapter() {
         recyclerViewCategories.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 val row = LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
                     layoutParams = RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT).apply {
@@ -529,7 +564,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupChannelAdapter() {
         recyclerViewChannels.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-            override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 return object : RecyclerView.ViewHolder(layoutInflater.inflate(R.layout.item_channel, parent, false)) {}
             }
 
@@ -544,10 +579,10 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                if (favoriteUrls.contains(ch.streamUrl)) {
-                    tvFavStar.visibility = View.VISIBLE
+                if (favoriteUrls?.contains(ch.streamUrl) == true) {
+                    tvFavStar?.visibility = View.VISIBLE
                 } else {
-                    tvFavStar.visibility = View.GONE
+                    tvFavStar?.visibility = View.GONE
                 }
 
                 if (ch.logoUrl.isNotEmpty()) {
