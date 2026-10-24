@@ -2,41 +2,35 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/channelRowLayout"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_marginStart="6dp"
-    android:layout_marginEnd="6dp"
+    android:layout_height="62dp"
     android:layout_marginBottom="6dp"
     android:clickable="true"
     android:focusable="true"
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingStart="16dp"
-    android:paddingTop="12dp"
-    android:paddingEnd="16dp"
-    android:paddingBottom="12dp">
+    android:paddingEnd="16dp">
 
-    <!-- Номер канала (расширен для 4-5 значных чисел) -->
+    <!-- Kanal Nömrəsi -->
     <TextView
         android:id="@+id/tvNumber"
-        android:layout_width="64dp"
+        android:layout_width="48dp"
         android:layout_height="wrap_content"
-        android:singleLine="true"
-        android:ellipsize="none"
         android:text="1"
-        android:textColor="#E0E0E0"
-        android:textSize="19sp"
+        android:textColor="#90A4AE"
+        android:textSize="17sp"
         android:textStyle="bold" />
 
-    <!-- Логотип канала -->
+    <!-- Kanal Loqosu -->
     <ImageView
         android:id="@+id/imgLogo"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
-        android:layout_marginStart="4dp"
-        android:layout_marginEnd="12dp"
-        android:scaleType="fitCenter" />
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="14dp"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
 
-    <!-- Название и программа передач -->
+    <!-- Kanal Adı və Məlumat -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -47,20 +41,33 @@
             android:id="@+id/tvName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:ellipsize="marquee"
             android:singleLine="true"
-            android:text="Канал"
-            android:textColor="#FFFFFF"
-            android:textSize="17sp"
+            android:text="Kanal Adı"
+            android:textColor="#ECEFF1"
+            android:textSize="16sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvProgramInfo"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="Нет информации о программе"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:text=""
             android:textColor="#78909C"
-            android:textSize="12sp" />
+            android:textSize="12sp"
+            android:visibility="gone" />
     </LinearLayout>
+
+    <!-- Seçilmişlər (Favorit) Nişanı -->
+    <TextView
+        android:id="@+id/tvFavStar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="★"
+        android:textColor="#FFD700"
+        android:textSize="16sp"
+        android:visibility="gone" />
 
 </LinearLayout>
