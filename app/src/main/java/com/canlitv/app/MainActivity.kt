@@ -72,7 +72,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
 
-    private var currentPlayingIndexInAll = -1
+    private var currentPlayingIndexInAll = 0
     private var previousPlayingIndexInAll = -1
     private val handler = Handler(Looper.getMainLooper())
     private val digitInputBuffer = StringBuilder()
@@ -150,11 +150,12 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
+        // 1.0.32-nin orijinal ExoPlayer quraşdırması
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .setUserAgent("Mozilla/5.0")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(20000)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(15000)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
             .setDataSourceFactory(httpDataSourceFactory)
@@ -169,7 +170,7 @@ class MainActivity : AppCompatActivity() {
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 runOnUiThread {
-                    Toast.makeText(applicationContext, "Yayım bərpa olunur...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "Yayım xətası baş verdi", Toast.LENGTH_SHORT).show()
                 }
             }
         })
@@ -260,12 +261,13 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.requestFocus()
     }
 
+    // 1.0.32-nin orijinal, dəqiq işləyən M3U yüklənməsi
     private fun fetchM3U(url: String, autoPlayFirst: Boolean) {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -278,21 +280,13 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Pleyist yüklənmədi: Şəbəkə xətası", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleyist yüklənmədi", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    runOnUiThread {
-                        Toast.makeText(applicationContext, "Server cavab vermədi: ${response.code}", Toast.LENGTH_SHORT).show()
-                        showSettingsDialog()
-                    }
-                    return
-                }
-
                 val body = response.body?.string() ?: return
                 
                 parseM3U(body)
@@ -302,11 +296,11 @@ class MainActivity : AppCompatActivity() {
                     filterChannels("Все")
 
                     if (allChannels.isNotEmpty()) {
-                        if (autoPlayFirst && currentPlayingIndexInAll == -1) {
+                        if (autoPlayFirst) {
                             playChannelByAllIndex(0)
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Pleyistdə kanal tapılmadı", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -546,7 +540,7 @@ class MainActivity : AppCompatActivity() {
         if (index !in allChannels.indices) return
         
         // Pultda GERİ (BACK) basıldıqda əvvəlki kanala qayıtmaq üçün qeyd edirik
-        if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
+        if (currentPlayingIndexInAll != index) {
             previousPlayingIndexInAll = currentPlayingIndexInAll
         }
 
