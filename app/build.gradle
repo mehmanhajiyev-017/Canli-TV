@@ -12,8 +12,8 @@ android {
         minSdk 21
         targetSdk 34
         
-        // GitHub Actions-dakı nömrəni götürür, yoxdursa 33-dən başlayır
-        def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "33").toInteger()
+        // Versiya nömrəsini GitHub-ın yığım nömrəsinə bağlayırıq (hər dəfə artır)
+        def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "75").toInteger()
         versionCode runNumber
         versionName "1.0.${runNumber}"
 
@@ -24,6 +24,10 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // Debug üçün də eyni versiya tətbiq edilir
+            versionNameSuffix ""
         }
     }
     compileOptions {
