@@ -16,6 +16,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
@@ -24,8 +26,6 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -55,7 +55,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveUrl: Button
     private lateinit var btnCloseSettings: Button
-    private lateinit var btnOpenSearch: View
     private lateinit var btnOpenSettings: View
     private lateinit var recyclerViewChannels: RecyclerView
     private lateinit var recyclerViewCategories: RecyclerView
@@ -91,7 +90,6 @@ class MainActivity : AppCompatActivity() {
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveUrl = findViewById(R.id.btnSaveUrl)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
-        btnOpenSearch = findViewById(R.id.btnOpenSearch)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
         recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
@@ -103,23 +101,19 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
 
-        btnOpenSearch.setOnClickListener {
-            categoryPanel.visibility = View.GONE
-            channelPanel.visibility = View.GONE
-            numPadPanel.visibility = View.VISIBLE
-            digitInputBuffer.clear()
-            tvNumpadDisplay.text = "---"
-            findViewById<Button>(R.id.btn1).post { findViewById<Button>(R.id.btn1).requestFocus() }
+        // Parlaq künclü Müasir TV Kökləmələr düyməsi
+        val settingsDefaultBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#1C222E"))
+            cornerRadius = 14f
+            setStroke(2, Color.parseColor("#2A3445"))
+        }
+        val settingsFocusedBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#2979FF")) // Parlaq Mavi fokus
+            cornerRadius = 14f
+            setStroke(3, Color.parseColor("#82B1FF"))
         }
 
-        btnOpenSearch.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
-                btnOpenSearch.performClick()
-                return@setOnKeyListener true
-            }
-            false
-        }
-
+        btnOpenSettings.background = settingsDefaultBg
         btnOpenSettings.setOnClickListener {
             categoryPanel.visibility = View.GONE
             channelPanel.visibility = View.GONE
@@ -127,16 +121,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnOpenSettings.setOnFocusChangeListener { _, hasFocus ->
+            val layout = btnOpenSettings as LinearLayout
+            val icon = layout.getChildAt(0) as? TextView
+            val text = layout.getChildAt(1) as? TextView
             if (hasFocus) {
-                btnOpenSettings.setBackgroundColor(Color.WHITE)
-                (btnOpenSettings as LinearLayout).getChildAt(0)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#1E232B")) }
-                (btnOpenSettings as LinearLayout).getChildAt(1)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#1E232B")) }
-                (btnOpenSettings as LinearLayout).getChildAt(2)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#1E232B")) }
+                btnOpenSettings.background = settingsFocusedBg
+                icon?.setTextColor(Color.WHITE)
+                text?.setTextColor(Color.WHITE)
             } else {
-                btnOpenSettings.setBackgroundColor(Color.parseColor("#252A34"))
-                (btnOpenSettings as LinearLayout).getChildAt(0)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#D8DEE9")) }
-                (btnOpenSettings as LinearLayout).getChildAt(1)?.let { (it as? TextView)?.setTextColor(Color.WHITE) }
-                (btnOpenSettings as LinearLayout).getChildAt(2)?.let { (it as? TextView)?.setTextColor(Color.parseColor("#78909C")) }
+                btnOpenSettings.background = settingsDefaultBg
+                icon?.setTextColor(Color.parseColor("#90A4AE"))
+                text?.setTextColor(Color.parseColor("#CFD8DC"))
             }
         }
 
@@ -166,7 +161,7 @@ class MainActivity : AppCompatActivity() {
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 runOnUiThread {
-                    Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "Yayım xətası baş verdi", Toast.LENGTH_SHORT).show()
                 }
             }
         })
@@ -186,7 +181,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url, autoPlayFirst = true)
             } else {
-                Toast.makeText(applicationContext, "Введите корректную ссылку M3U", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Düzgün M3U linki daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -223,10 +218,10 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} удален из Избранного", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} Seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} Seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
@@ -273,7 +268,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleyist yüklənmədi", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -293,7 +288,7 @@ class MainActivity : AppCompatActivity() {
                             playChannelByAllIndex(0)
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -305,7 +300,7 @@ class MainActivity : AppCompatActivity() {
         val lines = content.lines()
         var currentName = ""
         var currentLogo = ""
-        var currentGroup = "Общие"
+        var currentGroup = "Digər"
         var counter = 1
 
         val tempChannels = mutableListOf<Channel>()
@@ -317,11 +312,12 @@ class MainActivity : AppCompatActivity() {
             val trimmed = line.trim()
             if (trimmed.startsWith("#EXTINF")) {
                 currentLogo = Regex("tvg-logo=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentGroup = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: "Общие"
+                val groupFound = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
+                currentGroup = if (groupFound.isNotBlank()) groupFound.trim() else "Digər"
                 if (currentGroup.isNotEmpty()) tempCategories.add(currentGroup)
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-                val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
+                val name = if (currentName.isNotEmpty()) currentName else "Kanal $counter"
                 tempChannels.add(
                     Channel(
                         number = counter,
@@ -332,7 +328,7 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
                 counter++
-                currentName = ""; currentLogo = ""; currentGroup = "Общие"
+                currentName = ""; currentLogo = ""; currentGroup = "Digər"
             }
         }
 
@@ -378,7 +374,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.post {
             val layoutManager = recyclerViewChannels.layoutManager as? LinearLayoutManager ?: return@post
-            val itemHeightPx = (72 * resources.displayMetrics.density).toInt()
+            val itemHeightPx = (68 * resources.displayMetrics.density).toInt()
             val centerOffset = (recyclerViewChannels.height / 2) - (itemHeightPx / 2)
             layoutManager.scrollToPositionWithOffset(targetPos, centerOffset)
 
@@ -394,14 +390,22 @@ class MainActivity : AppCompatActivity() {
             override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
                 val row = LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    layoutParams = RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 4, 0, 6) }
-                    setPadding(16, 12, 16, 12)
+                    layoutParams = RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT).apply {
+                        setMargins(0, 4, 0, 6)
+                    }
+                    setPadding(18, 14, 18, 14)
                     gravity = android.view.Gravity.CENTER_VERTICAL
-                    isFocusable = true; isClickable = true
+                    isFocusable = true
+                    isClickable = true
                 }
-                val iconView = TextView(this@MainActivity).apply { id = View.generateViewId(); textSize = 17f }
-                val titleView = TextView(this@MainActivity).apply { id = View.generateViewId(); textSize = 15f; typeface = android.graphics.Typeface.DEFAULT_BOLD; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 14 } }
-                val arrowView = TextView(this@MainActivity).apply { id = View.generateViewId(); text = "›"; textSize = 20f }
+                val iconView = TextView(this@MainActivity).apply { id = View.generateViewId(); textSize = 18sp() }
+                val titleView = TextView(this@MainActivity).apply {
+                    id = View.generateViewId()
+                    textSize = 15f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 14 }
+                }
+                val arrowView = TextView(this@MainActivity).apply { id = View.generateViewId(); text = "›"; textSize = 18sp(); textStyleBold() }
                 row.addView(iconView); row.addView(titleView); row.addView(arrowView)
                 return object : RecyclerView.ViewHolder(row) {}
             }
@@ -414,40 +418,56 @@ class MainActivity : AppCompatActivity() {
                 val arrowView = row.getChildAt(2) as TextView
 
                 titleView.text = cat
-                iconView.text = when (cat) { "Все" -> "☰"; "Избранное" -> "★"; else -> "📁" }
+                iconView.text = when (cat) {
+                    "Все" -> "☰"
+                    "Избранное" -> "★"
+                    else -> "📁"
+                }
 
-                val whiteBg = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = 24f }
-                val transparentBg = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
+                // Parlaq TV İşıqlı Fokus Fonu (Neon Cyan / Deep Blue)
+                val catFocusedBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2979FF")) // Canlı işıqlı göy rəng
+                    cornerRadius = 14f
+                    setStroke(3, Color.parseColor("#82B1FF"))
+                }
+                val catDefaultBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#151A22"))
+                    cornerRadius = 14f
+                }
+
+                row.background = catDefaultBg
 
                 row.setOnFocusChangeListener { _, hasFocus ->
                     if (hasFocus) {
-                        row.background = whiteBg
-                        titleView.setTextColor(Color.parseColor("#1E232B"))
-                        iconView.setTextColor(Color.parseColor("#1E232B"))
-                        arrowView.text = "••• ›"
-                        arrowView.setTextColor(Color.parseColor("#4CAF50"))
-                    } else {
-                        row.background = transparentBg
-                        titleView.setTextColor(Color.parseColor("#D8DEE9"))
-                        iconView.setTextColor(Color.parseColor("#78909C"))
+                        row.background = catFocusedBg
+                        titleView.setTextColor(Color.WHITE)
+                        iconView.setTextColor(Color.WHITE)
+                        arrowView.setTextColor(Color.WHITE)
                         arrowView.text = "›"
-                        arrowView.setTextColor(Color.parseColor("#78909C"))
+                    } else {
+                        row.background = catDefaultBg
+                        titleView.setTextColor(Color.parseColor("#CFD8DC"))
+                        iconView.setTextColor(Color.parseColor("#78909C"))
+                        arrowView.setTextColor(Color.parseColor("#546E7A"))
+                        arrowView.text = "›"
                     }
                 }
 
-                row.setOnClickListener {
+                val selectAction = {
                     filterChannels(cat)
                     categoryPanel.visibility = View.GONE
                     channelPanel.visibility = View.VISIBLE
                     focusCurrentChannelCentered()
                 }
 
+                row.setOnClickListener { selectAction() }
+
                 row.setOnKeyListener { _, keyCode, event ->
-                    if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                        categoryPanel.visibility = View.GONE
-                        channelPanel.visibility = View.VISIBLE
-                        focusCurrentChannelCentered()
-                        return@setOnKeyListener true
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                            selectAction()
+                            return@setOnKeyListener true
+                        }
                     }
                     false
                 }
@@ -468,11 +488,16 @@ class MainActivity : AppCompatActivity() {
                 val tvNum = holder.itemView.findViewById<TextView>(R.id.tvNumber)
                 val imgLogo = holder.itemView.findViewById<ImageView>(R.id.imgLogo)
                 val tvName = holder.itemView.findViewById<TextView>(R.id.tvName)
-                val tvProg = holder.itemView.findViewById<TextView>(R.id.tvProgramInfo)
+                val tvFavStar = holder.itemView.findViewById<TextView>(R.id.tvFavStar)
 
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
-                tvProg.text = ""
+
+                if (favoriteUrls.contains(channelUrl(ch))) {
+                    tvFavStar.visibility = View.VISIBLE
+                } else {
+                    tvFavStar.visibility = View.GONE
+                }
 
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
@@ -481,20 +506,28 @@ class MainActivity : AppCompatActivity() {
                     imgLogo.visibility = View.GONE
                 }
 
-                val cardFocusedBg = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = 14f }
-                val cardDefaultBg = GradientDrawable().apply { setColor(Color.TRANSPARENT) }
+                // Parlaq Seçim İşığı (Mavi / Neon Kontrastlı Kart)
+                val cardFocusedBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2979FF")) // İşıqlı parlaq göy
+                    cornerRadius = 14f
+                    setStroke(3, Color.parseColor("#E0E0E0")) // Ağ parlaq çərçivə
+                }
+                val cardDefaultBg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#151A22")) // Təmiz qaranlıq kart
+                    cornerRadius = 14f
+                }
+
+                row.background = cardDefaultBg
 
                 row.setOnFocusChangeListener { _, hasFocus ->
                     if (hasFocus) {
                         row.background = cardFocusedBg
-                        tvNum.setTextColor(Color.parseColor("#1E232B"))
-                        tvName.setTextColor(Color.parseColor("#1E232B"))
-                        tvProg.setTextColor(Color.parseColor("#5A6578"))
+                        tvNum.setTextColor(Color.WHITE)
+                        tvName.setTextColor(Color.WHITE)
                     } else {
                         row.background = cardDefaultBg
-                        tvNum.setTextColor(Color.parseColor("#E0E0E0"))
-                        tvName.setTextColor(Color.WHITE)
-                        tvProg.setTextColor(Color.parseColor("#78909C"))
+                        tvNum.setTextColor(Color.parseColor("#78909C"))
+                        tvName.setTextColor(Color.parseColor("#ECEFF1"))
                     }
                 }
 
@@ -529,10 +562,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun channelUrl(ch: Channel): String = ch.streamUrl
+
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
         
-        // Pultda GERİ (BACK) basıldıqda əvvəlki kanala qayıtmaq üçün qeyd edirik
         if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
             previousPlayingIndexInAll = currentPlayingIndexInAll
         }
@@ -552,7 +586,7 @@ class MainActivity : AppCompatActivity() {
     private fun showInfoBanner(channel: Channel) {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
-        val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★ ИЗБРАННОЕ" else ""
+        val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★" else ""
 
         tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
 
@@ -587,7 +621,11 @@ class MainActivity : AppCompatActivity() {
         if (channelPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                 channelPanel.visibility = View.GONE; categoryPanel.visibility = View.VISIBLE
-                recyclerViewCategories.post { recyclerViewCategories.requestFocus() }
+                val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
+                recyclerViewCategories.post {
+                    recyclerViewCategories.scrollToPosition(catIndex)
+                    recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)?.itemView?.requestFocus() ?: recyclerViewCategories.requestFocus()
+                }
                 return true
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_BACK) {
@@ -596,7 +634,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         when (keyCode) {
-            // Pultda GERİ (BACK) basıldıqda əvvəlki baxılmış kanala qayıdır
             KeyEvent.KEYCODE_BACK -> {
                 if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
                     playChannelByAllIndex(previousPlayingIndexInAll)
@@ -649,10 +686,16 @@ class MainActivity : AppCompatActivity() {
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
-            else { Toast.makeText(applicationContext, "Не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "Не найден" }
+            else { Toast.makeText(applicationContext, "Tapılmadı", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
         }
         digitInputBuffer.clear()
     }
+
+    private fun TextView.textStyleBold() {
+        this.typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+
+    private fun sp(): Float = 17f
 
     override fun onDestroy() {
         super.onDestroy()
