@@ -44,7 +44,7 @@ data class Channel(
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var player: ExoPlayer
+    private var player: ExoPlayer? = null
     private lateinit var playerView: PlayerView
     private lateinit var channelPanel: View
     private lateinit var categoryPanel: View
@@ -71,6 +71,8 @@ class MainActivity : AppCompatActivity() {
 
     private var currentPlayingIndexInAll = -1
     private var previousPlayingIndexInAll = -1
+    private var doubleBackToExitPressedOnce = false
+
     private val handler = Handler(Looper.getMainLooper())
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
@@ -101,7 +103,6 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
 
-        // Nastroyka düyməsinin fonu və işıqlı fokusu
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#1C222E"))
             cornerRadius = 14f
@@ -136,35 +137,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnOpenSettings.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
-                btnOpenSettings.performClick()
-                return@setOnKeyListener true
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                    btnOpenSettings.performClick()
+                    return@setOnKeyListener true
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    categoryPanel.visibility = View.GONE
+                    channelPanel.visibility = View.VISIBLE
+                    focusCurrentChannelCentered()
+                    return@setOnKeyListener true
+                }
             }
             false
         }
 
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
-
-        player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build()
-
-        playerView.player = player
-        playerView.useController = false
-
-        player.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                runOnUiThread {
-                    Toast.makeText(applicationContext, "Yayım xətası baş verdi", Toast.LENGTH_SHORT).show()
-                }
-            }
-        })
+        initPlayer()
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
@@ -190,8 +177,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun initPlayer() {
+        if (player == null) {
+            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setUserAgent("Mozilla/5.0")
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
+
+            val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
+
+            player = ExoPlayer.Builder(this)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build()
+
+            playerView.player = player
+            playerView.useController = false
+
+            player?.addListener(object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    runOnUiThread {
+                        Toast.makeText(applicationContext, "Yayım xətası baş verdi", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            })
+        }
+    }
+
     override fun onStart() {
         super.onStart()
+        initPlayer()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
@@ -201,6 +216,27 @@ class MainActivity : AppCompatActivity() {
         } else {
             showSettingsDialog()
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Ekrandan çıxanda və ya arxa fona gedəndə pleyeri dərhal saxlayırıq
+        player?.playWhenReady = false
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Tətbiq arxa fona düşdükdə pleyeri tam azad edirik ki, səs davam etməsin
+        player?.stop()
+        player?.release()
+        player = null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        player?.release()
+        player = null
+        handler.removeCallbacksAndMessages(null)
     }
 
     private fun loadFavorites() {
@@ -300,35 +336,39 @@ class MainActivity : AppCompatActivity() {
         val lines = content.lines()
         var currentName = ""
         var currentLogo = ""
-        var currentGroup = "Digər"
+        var currentGroup = ""
         var counter = 1
 
         val tempChannels = mutableListOf<Channel>()
-        val tempCategories = mutableSetOf<String>()
+        val tempCategories = LinkedHashSet<String>()
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
+        val groupRegex = Regex("group-title=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        val logoRegex = Regex("tvg-logo=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+
         for (line in lines) {
             val trimmed = line.trim()
-            if (trimmed.startsWith("#EXTINF")) {
-                currentLogo = Regex("tvg-logo=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                val groupFound = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentGroup = if (groupFound.isNotBlank()) groupFound.trim() else "Digər"
+            if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
+                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                currentGroup = if (groupFound.isNotBlank()) groupFound else "Digər"
                 if (currentGroup.isNotEmpty()) tempCategories.add(currentGroup)
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-                val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
+                val name = if (currentName.isNotEmpty()) currentName else "Kanal $counter"
+                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Digər"
                 tempChannels.add(
                     Channel(
                         number = counter,
                         name = name,
                         logoUrl = currentLogo,
                         streamUrl = trimmed,
-                        category = currentGroup
+                        category = cat
                     )
                 )
                 counter++
-                currentName = ""; currentLogo = ""; currentGroup = "Digər"
+                currentName = ""; currentLogo = ""; currentGroup = ""
             }
         }
 
@@ -351,6 +391,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
+        categoryPanel.visibility = View.GONE
         if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
             filterChannels(selectedCategory)
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
@@ -368,7 +409,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun focusCurrentChannelCentered() {
-        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) return
+        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
+            recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+            return
+        }
         val currentChannel = allChannels[currentPlayingIndexInAll]
         val targetPos = displayedChannels.indexOfFirst { it.number == currentChannel.number }.coerceAtLeast(0)
 
@@ -432,7 +476,6 @@ class MainActivity : AppCompatActivity() {
                     else -> "📁"
                 }
 
-                // Parlaq Mavi fokus fonu
                 val catFocusedBg = GradientDrawable().apply {
                     setColor(Color.parseColor("#2979FF"))
                     cornerRadius = 14f
@@ -463,7 +506,11 @@ class MainActivity : AppCompatActivity() {
                     filterChannels(cat)
                     categoryPanel.visibility = View.GONE
                     channelPanel.visibility = View.VISIBLE
-                    focusCurrentChannelCentered()
+                    recyclerViewChannels.post {
+                        recyclerViewChannels.scrollToPosition(0)
+                        val vh = recyclerViewChannels.findViewHolderForAdapterPosition(0)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewChannels.requestFocus()
+                    }
                 }
 
                 row.setOnClickListener { selectAction() }
@@ -512,7 +559,6 @@ class MainActivity : AppCompatActivity() {
                     imgLogo.visibility = View.GONE
                 }
 
-                // Seçilən kanal üçün parlaq göy fon və ağ kontur
                 val cardFocusedBg = GradientDrawable().apply {
                     setColor(Color.parseColor("#2979FF"))
                     cornerRadius = 14f
@@ -553,7 +599,8 @@ class MainActivity : AppCompatActivity() {
                             val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
                             recyclerViewCategories.post {
                                 recyclerViewCategories.scrollToPosition(catIndex)
-                                recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)?.itemView?.requestFocus() ?: recyclerViewCategories.requestFocus()
+                                val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                                if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
                             }
                             return@setOnKeyListener true
                         } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
@@ -578,12 +625,13 @@ class MainActivity : AppCompatActivity() {
         currentPlayingIndexInAll = index
         val channel = allChannels[index]
 
+        initPlayer()
         val streamUri = Uri.parse(channel.streamUrl)
         val mediaItem = MediaItem.fromUri(streamUri)
 
-        player.setMediaItem(mediaItem)
-        player.prepare()
-        player.playWhenReady = true
+        player?.setMediaItem(mediaItem)
+        player?.prepare()
+        player?.playWhenReady = true
         showInfoBanner(channel)
     }
 
@@ -601,6 +649,14 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(r, 4000)
     }
 
+    private fun exitApplicationCompletely() {
+        // Pleyeri tam dayandırırıq, resursları boşaldırıq və tətbiqi sistemdən bağlayırıq
+        player?.stop()
+        player?.release()
+        player = null
+        finishAffinity()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (linkDialogPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
@@ -616,33 +672,71 @@ class MainActivity : AppCompatActivity() {
             }
             return super.onKeyDown(keyCode, event)
         }
+
+        // KATEQORİYALAR PANELİ AÇIQDIRSA:
         if (categoryPanel.visibility == View.VISIBLE) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) { categoryPanel.visibility = View.GONE; return true }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                categoryPanel.visibility = View.GONE; channelPanel.visibility = View.VISIBLE; focusCurrentChannelCentered(); return true
-            }
-        }
-        if (channelPanel.visibility == View.VISIBLE) {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                channelPanel.visibility = View.GONE; categoryPanel.visibility = View.VISIBLE
-                val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
-                recyclerViewCategories.post {
-                    recyclerViewCategories.scrollToPosition(catIndex)
-                    recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)?.itemView?.requestFocus() ?: recyclerViewCategories.requestFocus()
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    categoryPanel.visibility = View.GONE
+                    return true
                 }
-                return true
-            }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_BACK) {
-                channelPanel.visibility = View.GONE; return true
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    categoryPanel.visibility = View.GONE
+                    channelPanel.visibility = View.VISIBLE
+                    focusCurrentChannelCentered()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    return super.onKeyDown(keyCode, event)
+                }
             }
         }
 
+        // KANALLAR PANELİ AÇIQDIRSA:
+        if (channelPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    channelPanel.visibility = View.GONE
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    channelPanel.visibility = View.GONE
+                    categoryPanel.visibility = View.VISIBLE
+                    val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
+                    recyclerViewCategories.post {
+                        recyclerViewCategories.scrollToPosition(catIndex)
+                        val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    return super.onKeyDown(keyCode, event)
+                }
+            }
+        }
+
+        // ANA EKRAN İDARƏETMƏSİ:
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
+                // Əvvəlki baxılmış kanal varsa, ona qayıdır
                 if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
                     playChannelByAllIndex(previousPlayingIndexInAll)
                     return true
                 }
+
+                // Əgər əvvəlki kanal yoxdursa, ardıcıl 2 dəfə Back basıldıqda tətbiq fonda qalmadan tam bağlanır
+                if (doubleBackToExitPressedOnce) {
+                    exitApplicationCompletely()
+                    return true
+                }
+
+                this.doubleBackToExitPressedOnce = true
+                Toast.makeText(this, "Çıxmaq üçün geri düyməsini bir daha basın", Toast.LENGTH_SHORT).show()
+                handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 if (allChannels.isNotEmpty() && currentPlayingIndexInAll in allChannels.indices) {
@@ -693,10 +787,5 @@ class MainActivity : AppCompatActivity() {
             else { Toast.makeText(applicationContext, "Tapılmadı", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
         }
         digitInputBuffer.clear()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        player.release()
     }
 }
