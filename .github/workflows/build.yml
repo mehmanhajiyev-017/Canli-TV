@@ -19,21 +19,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Cache Debug Keystore (Постоянная подпись APK)
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: android-tv-permanent-debug-key-v1
-
-      - name: Generate Fixed Keystore if not exists
+      # Həmişə eyni sabit imza faylını layihənin daxilində yaradır
+      - name: Create Permanent Keystore
         run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore ~/.android/debug.keystore \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          mkdir -p app/keystore
+          keytool -genkeypair -v \
+            -keystore app/keystore/release.jks \
+            -alias tvkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "android123" \
+            -keypass "android123" \
+            -dname "CN=CanliTV, OU=TV, O=App, L=Baku, C=AZ"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -41,10 +39,10 @@ jobs:
           gradle-version: '8.2'
 
       - name: Build with Gradle
-        run: gradle assembleDebug
+        run: gradle assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: TV-v1.0.${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
