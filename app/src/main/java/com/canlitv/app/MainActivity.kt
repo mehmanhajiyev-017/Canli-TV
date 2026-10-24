@@ -112,7 +112,6 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
-        // Полупрозрачный дизайн боковых панелей и баннеров:
         categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         channelPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         infoBanner.setBackgroundColor(Color.parseColor("#880B0E14"))
@@ -122,10 +121,8 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
 
-        // Скрываем кнопку "Поиск по номеру":
         findViewById<View?>(R.id.btnOpenSearch)?.visibility = View.GONE
 
-        // Перемещаем кнопку "Настройки" в самый низ списка категорий:
         (categoryPanel as? LinearLayout)?.let { panel ->
             panel.removeView(btnOpenSettings)
             val params = LinearLayout.LayoutParams(
@@ -249,7 +246,6 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
-        // Автоматическое обновление плейлиста при каждом входе в приложение
         if (savedUrl.isNotEmpty()) {
             fetchM3U(savedUrl, autoPlay = true)
         } else {
@@ -520,7 +516,6 @@ class MainActivity : AppCompatActivity() {
         parser.setInput(inputStream, null)
 
         val now = System.currentTimeMillis()
-        val channelIdToDisplayName = HashMap<String, String>()
         val tempEpg = HashMap<String, String>()
 
         var eventType = parser.eventType
@@ -530,6 +525,12 @@ class MainActivity : AppCompatActivity() {
         var progChannel = ""
         var isCurrentProg = false
         var progTitle = ""
+
+        fun cleanKey(text: String): String {
+            return text.lowercase(Locale.ROOT)
+                .replace(Regex("""\b(hd|sd|ru|ua|int|+1|+2|4k|ussr|iptv)\b"""), "")
+                .replace(Regex("""[^a-z0-9а-яё]"""), "")
+        }
 
         while (eventType != XmlPullParser.END_DOCUMENT) {
             when (eventType) {
@@ -543,7 +544,8 @@ class MainActivity : AppCompatActivity() {
                             if (inChannel && currentChannelId.isNotEmpty()) {
                                 val dName = parser.nextText().trim()
                                 if (dName.isNotEmpty()) {
-                                    channelIdToDisplayName[currentChannelId] = dName.lowercase(Locale.ROOT)
+                                    tempEpg[cleanKey(dName)] = ""
+                                    tempEpg[currentChannelId.lowercase(Locale.ROOT)] = dName
                                 }
                             }
                         }
@@ -573,12 +575,8 @@ class MainActivity : AppCompatActivity() {
                             currentChannelId = ""
                         }
                         "programme" -> {
-                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty()) {
-                                tempEpg[progChannel.lowercase(Locale.ROOT)] = progTitle
-                                val dName = channelIdToDisplayName[progChannel]
-                                if (dName != null) {
-                                    tempEpg[dName] = progTitle
-                                }
+                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty() && progChannel.isNotEmpty()) {
+                                tempEpg[progChannel.lowercase(Locale.ROOT) + "_prog"] = progTitle
                             }
                             inProgramme = false
                             isCurrentProg = false
@@ -589,8 +587,20 @@ class MainActivity : AppCompatActivity() {
             eventType = parser.next()
         }
 
+        val finalEpg = HashMap<String, String>()
+        for ((key, value) in tempEpg) {
+            if (key.endsWith("_prog")) {
+                val chId = key.removeSuffix("_prog")
+                val realName = tempEpg[chId]
+                if (realName != null) {
+                    finalEpg[cleanKey(realName)] = value
+                }
+                finalEpg[chId] = value
+            }
+        }
+
         epgMap.clear()
-        epgMap.putAll(tempEpg)
+        epgMap.putAll(finalEpg)
 
         runOnUiThread {
             recyclerViewChannels.adapter?.notifyDataSetChanged()
@@ -617,10 +627,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun getProgramForChannel(ch: Channel): String {
         if (epgMap.isEmpty()) return ""
+        
+        fun cleanKey(text: String): String {
+            return text.lowercase(Locale.ROOT)
+                .replace(Regex("""\b(hd|sd|ru|ua|int|+1|+2|4k|ussr|iptv)\b"""), "")
+                .replace(Regex("""[^a-z0-9а-яё]"""), "")
+        }
+
         if (ch.tvgId.isNotEmpty()) {
             epgMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
-        epgMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
+        epgMap[cleanKey(ch.name)]?.let { return it }
         return ""
     }
 
@@ -793,14 +810,9 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                val currentProg = getProgramForChannel(ch)
-                if (currentProg.isNotEmpty()) {
-                    tvProg?.text = currentProg
-                    tvProg?.visibility = View.VISIBLE
-                } else {
-                    tvProg?.text = ""
-                    tvProg?.visibility = View.GONE
-                }
+                // Убираем вывод EPG из списка каналов (скрываем поле программы на панели)
+                tvProg?.text = ""
+                tvProg?.visibility = View.GONE
 
                 if (favoriteUrls.contains(ch.streamUrl)) {
                     tvFavStar?.visibility = View.VISIBLE
@@ -832,12 +844,10 @@ class MainActivity : AppCompatActivity() {
                         row.background = cardFocusedBg
                         tvNum.setTextColor(Color.WHITE)
                         tvName.setTextColor(Color.WHITE)
-                        tvProg?.setTextColor(Color.parseColor("#E3F2FD"))
                     } else {
                         row.background = cardDefaultBg
                         tvNum.setTextColor(Color.parseColor("#B0BEC5"))
                         tvName.setTextColor(Color.parseColor("#FFFFFF"))
-                        tvProg?.setTextColor(Color.parseColor("#90A4AE"))
                     }
                 }
 
@@ -851,7 +861,6 @@ class MainActivity : AppCompatActivity() {
 
                 row.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        // Круговая прокрутка с 1-го канала вверх на последний (например, 1174)
                         if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0 && displayedChannels.size > 1) {
                             val lastIndex = displayedChannels.size - 1
                             recyclerViewChannels.scrollToPosition(lastIndex)
@@ -859,16 +868,13 @@ class MainActivity : AppCompatActivity() {
                                 recyclerViewChannels.findViewHolderForAdapterPosition(lastIndex)?.itemView?.requestFocus()
                             }
                             return@setOnKeyListener true
-                        }
-                        // Круговая прокрутка с последнего канала вниз на 1-й
-                        else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && position == displayedChannels.size - 1 && displayedChannels.size > 1) {
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && position == displayedChannels.size - 1 && displayedChannels.size > 1) {
                             recyclerViewChannels.scrollToPosition(0)
                             recyclerViewChannels.post {
                                 recyclerViewChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
                             }
                             return@setOnKeyListener true
-                        }
-                        else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                             channelPanel.visibility = View.GONE
                             categoryPanel.visibility = View.VISIBLE
                             val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
@@ -919,8 +925,10 @@ class MainActivity : AppCompatActivity() {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★" else ""
+        
+        // Отображаем EPG только для текущего играющего канала с ромбиком 🔹
         val currentProg = getProgramForChannel(channel)
-        val progText = if (currentProg.isNotEmpty()) "  |  📺 $currentProg" else ""
+        val progText = if (currentProg.isNotEmpty()) "  |  🔹 $currentProg" else ""
 
         tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav$progText"
 
