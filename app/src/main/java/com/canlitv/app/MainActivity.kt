@@ -704,7 +704,7 @@ class MainActivity : AppCompatActivity() {
                         val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
                         if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
                     }
-                    return@setOnKeyListener true
+                    return true
                 }
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
@@ -742,7 +742,7 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
                 if (allChannels.isNotEmpty()) {
                     playChannelByAllIndex(if (currentPlayingIndexInAll - 1 < 0) allChannels.size - 1 else currentPlayingIndexInAll - 1)
-                    return
+                    return true
                 }
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanelCenteredOnCurrent(); return true }
