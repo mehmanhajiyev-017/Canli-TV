@@ -16,16 +16,16 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.PlayerView
+import com.bumptech.glide.Glide
+import com.google.android.exoplayer2.ExoPlayer
+import com.google.android.exoplayer2.MediaItem
+import com.google.android.exoplayer2.PlaybackException
+import com.google.android.exoplayer2.Player
+import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
+import com.google.android.exoplayer2.ui.PlayerView
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
 import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
@@ -154,8 +154,7 @@ class MainActivity : AppCompatActivity() {
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(15000)
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(this)
-            .setDataSourceFactory(httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
 
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -533,7 +532,7 @@ class MainActivity : AppCompatActivity() {
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
         
-        // Pultda GERİ (BACK) düyməsi üçün əvvəlki kanalı yaddaşa alırıq
+        // Pultda GERİ (BACK) basıldıqda əvvəlki kanala qayıtmaq üçün qeyd edirik
         if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
             previousPlayingIndexInAll = currentPlayingIndexInAll
         }
@@ -542,11 +541,7 @@ class MainActivity : AppCompatActivity() {
         val channel = allChannels[index]
 
         val streamUri = Uri.parse(channel.streamUrl)
-        val mediaItem = if (channel.streamUrl.contains(".m3u8", ignoreCase = true)) {
-            MediaItem.Builder().setUri(streamUri).setMimeType("application/x-mpegURL").build()
-        } else {
-            MediaItem.fromUri(streamUri)
-        }
+        val mediaItem = MediaItem.fromUri(streamUri)
 
         player.setMediaItem(mediaItem)
         player.prepare()
