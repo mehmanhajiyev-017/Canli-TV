@@ -34,6 +34,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 data class Channel(
     val number: Int,
@@ -150,10 +151,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0")
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(20000)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
             .setDataSourceFactory(httpDataSourceFactory)
@@ -263,8 +264,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -277,13 +278,21 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Pleyist yüklənmədi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleyist yüklənmədi: Şəbəkə xətası", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        Toast.makeText(applicationContext, "Server cavab vermədi: ${response.code}", Toast.LENGTH_SHORT).show()
+                        showSettingsDialog()
+                    }
+                    return
+                }
+
                 val body = response.body?.string() ?: return
                 
                 parseM3U(body)
@@ -297,7 +306,7 @@ class MainActivity : AppCompatActivity() {
                             playChannelByAllIndex(0)
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleyistdə kanal tapılmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -536,6 +545,7 @@ class MainActivity : AppCompatActivity() {
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
         
+        // Pultda GERİ (BACK) basıldıqda əvvəlki kanala qayıtmaq üçün qeyd edirik
         if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
             previousPlayingIndexInAll = currentPlayingIndexInAll
         }
@@ -603,6 +613,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         when (keyCode) {
+            // Pultda GERİ (BACK) basıldıqda əvvəlki baxılmış kanala qayıdır
             KeyEvent.KEYCODE_BACK -> {
                 if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
                     playChannelByAllIndex(previousPlayingIndexInAll)
