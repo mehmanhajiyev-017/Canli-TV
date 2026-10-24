@@ -40,6 +40,7 @@ import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
 data class Channel(
@@ -216,7 +217,7 @@ class MainActivity : AppCompatActivity() {
     private fun initPlayer() {
         if (player == null) {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("Mozilla/5.0")
+                .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                 .setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(15000)
                 .setReadTimeoutMs(15000)
@@ -325,6 +326,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .cache(null)
             .build()
 
@@ -332,22 +335,30 @@ class MainActivity : AppCompatActivity() {
             .url(url)
             .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Cache-Control", "no-cache, no-store, must-revalidate")
-            .header("Pragma", "no-cache")
-            .header("Expires", "0")
-            .header("User-Agent", "Mozilla/5.0")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        if (allChannels.isEmpty()) {
+                            Toast.makeText(applicationContext, "Ошибка сервера: ${response.code}", Toast.LENGTH_LONG).show()
+                            showSettingsDialog()
+                        }
+                    }
+                    return
+                }
+
                 val body = response.body?.string() ?: return
 
                 val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
@@ -388,7 +399,7 @@ class MainActivity : AppCompatActivity() {
                             currentPlayingIndexInAll = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Каналы не найдены в плейлисте", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -475,13 +486,14 @@ class MainActivity : AppCompatActivity() {
             .url(epgUrl)
             .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Cache-Control", "no-cache, no-store, must-revalidate")
-            .header("User-Agent", "Mozilla/5.0")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {}
 
             override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) return
                 val bodyStream = response.body?.byteStream() ?: return
                 try {
                     val isGzip = epgUrl.endsWith(".gz", ignoreCase = true) ||
