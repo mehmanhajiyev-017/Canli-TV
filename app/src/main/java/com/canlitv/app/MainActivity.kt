@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Xml
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -33,14 +34,21 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.xmlpull.v1.XmlPullParser
 import java.io.IOException
+import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.GZIPInputStream
 
 data class Channel(
     val number: Int,
     val name: String,
     val logoUrl: String,
     val streamUrl: String,
-    val category: String
+    val category: String,
+    val tvgId: String = ""
 )
 
 class MainActivity : AppCompatActivity() {
@@ -69,6 +77,9 @@ class MainActivity : AppCompatActivity() {
     private val categories = mutableListOf<String>()
     private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
+
+    private val epgMap = ConcurrentHashMap<String, String>()
+    private var detectedPlaylistEpgUrl: String = ""
 
     private var currentPlayingIndexInAll = -1
     private var previousPlayingIndexInAll = -1
@@ -101,10 +112,20 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
-        // XML-ə toxunmadan "Поиск по номеру" düyməsini tamamilə yox edirik:
+        // Полупрозрачный дизайн боковых панелей и баннеров:
+        categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
+        channelPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
+        infoBanner.setBackgroundColor(Color.parseColor("#880B0E14"))
+        numPadPanel.background = GradientDrawable().apply {
+            setColor(Color.parseColor("#990B0E14"))
+            cornerRadius = 20f
+            setStroke(2, Color.parseColor("#33FFFFFF"))
+        }
+
+        // Скрываем кнопку "Поиск по номеру":
         findViewById<View?>(R.id.btnOpenSearch)?.visibility = View.GONE
 
-        // XML-ə toxunmadan "Настройки" düyməsini tutub siyahının ƏN AŞAĞISINA salırıq:
+        // Перемещаем кнопку "Настройки" в самый низ списка категорий:
         (categoryPanel as? LinearLayout)?.let { panel ->
             panel.removeView(btnOpenSettings)
             val params = LinearLayout.LayoutParams(
@@ -121,14 +142,14 @@ class MainActivity : AppCompatActivity() {
         initNumpadButtons()
 
         val settingsDefaultBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#1C222E"))
+            setColor(Color.parseColor("#551C222E"))
             cornerRadius = 14f
-            setStroke(2, Color.parseColor("#2A3445"))
+            setStroke(2, Color.parseColor("#33FFFFFF"))
         }
         val settingsFocusedBg = GradientDrawable().apply {
             setColor(Color.parseColor("#2979FF"))
             cornerRadius = 14f
-            setStroke(3, Color.parseColor("#82B1FF"))
+            setStroke(3, Color.parseColor("#FFFFFF"))
         }
 
         btnOpenSettings.background = settingsDefaultBg
@@ -148,8 +169,8 @@ class MainActivity : AppCompatActivity() {
                 text?.setTextColor(Color.WHITE)
             } else {
                 btnOpenSettings.background = settingsDefaultBg
-                icon?.setTextColor(Color.parseColor("#90A4AE"))
-                text?.setTextColor(Color.parseColor("#CFD8DC"))
+                icon?.setTextColor(Color.parseColor("#B0BEC5"))
+                text?.setTextColor(Color.parseColor("#ECEFF1"))
             }
         }
 
@@ -183,9 +204,10 @@ class MainActivity : AppCompatActivity() {
                     .putString("EPG_URL", epgUrl)
                     .apply()
                 linkDialogPanel.visibility = View.GONE
-                fetchM3U(url, autoPlayFirst = true)
+                currentPlayingIndexInAll = -1
+                fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "Düzgün M3U linki daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Введите корректную ссылку M3U", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -214,7 +236,7 @@ class MainActivity : AppCompatActivity() {
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, "Yayım xətası baş verdi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
                     }
                 }
             })
@@ -227,9 +249,9 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
+        // Автоматическое обновление плейлиста при каждом входе в приложение
         if (savedUrl.isNotEmpty()) {
-            val isFirstLaunch = allChannels.isEmpty()
-            fetchM3U(savedUrl, autoPlayFirst = isFirstLaunch)
+            fetchM3U(savedUrl, autoPlay = true)
         } else {
             showSettingsDialog()
         }
@@ -269,10 +291,10 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} Seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} удален из Избранного", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} Seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
@@ -303,15 +325,19 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.requestFocus()
     }
 
-    private fun fetchM3U(url: String, autoPlayFirst: Boolean) {
+    private fun fetchM3U(url: String, autoPlay: Boolean) {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
+            .cache(null)
             .build()
 
         val request = Request.Builder()
             .url(url)
             .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("Pragma", "no-cache")
+            .header("Expires", "0")
             .header("User-Agent", "Mozilla/5.0")
             .build()
 
@@ -319,7 +345,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Pleyist yüklənmədi", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -328,18 +354,45 @@ class MainActivity : AppCompatActivity() {
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: return
 
+                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                val lastPlayedUrl = if (currentPlayingIndexInAll in allChannels.indices) {
+                    allChannels[currentPlayingIndexInAll].streamUrl
+                } else {
+                    prefs.getString("LAST_CHANNEL_URL", "") ?: ""
+                }
+
                 parseM3U(body)
+
+                val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
+                val finalEpgUrl = if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
+                    savedEpg
+                } else {
+                    detectedPlaylistEpgUrl
+                }
+
+                if (finalEpgUrl.isNotEmpty() && finalEpgUrl.startsWith("http")) {
+                    fetchEPG(finalEpgUrl)
+                }
 
                 runOnUiThread {
                     setupCategoryAdapter()
-                    filterChannels("Все")
+                    val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
+                    filterChannels(catToSelect)
 
                     if (allChannels.isNotEmpty()) {
-                        if (autoPlayFirst && currentPlayingIndexInAll == -1) {
-                            playChannelByAllIndex(0)
+                        val resumeIndex = if (lastPlayedUrl.isNotEmpty()) {
+                            allChannels.indexOfFirst { it.streamUrl == lastPlayedUrl }.takeIf { it != -1 } ?: 0
+                        } else {
+                            0
+                        }
+
+                        if (autoPlay || player?.isPlaying != true) {
+                            playChannelByAllIndex(resumeIndex)
+                        } else {
+                            currentPlayingIndexInAll = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -352,24 +405,38 @@ class MainActivity : AppCompatActivity() {
         var currentName = ""
         var currentLogo = ""
         var currentGroup = ""
+        var currentTvgId = ""
         var counter = 1
+        detectedPlaylistEpgUrl = ""
 
         val tempChannels = mutableListOf<Channel>()
         val tempCategories = LinkedHashSet<String>()
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        // Bütün növ M3U formatlarını (dırnaqlı, tək dırnaqlı, #EXTGRP) oxuyan güclü Regex
         val groupRegex = Regex("""group-title\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
         val logoRegex = Regex("""tvg-logo\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
+        val idRegex = Regex("""tvg-id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
+        val epgHeaderRegex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
             val trimmed = line.trim()
-            if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
+            if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {
+                val epgMatch = epgHeaderRegex.find(trimmed)
+                val extractedEpg = (epgMatch?.groups?.get(1)?.value ?: epgMatch?.groups?.get(2)?.value ?: "").trim()
+                if (extractedEpg.isNotEmpty()) {
+                    detectedPlaylistEpgUrl = extractedEpg.split(",").first().trim()
+                }
+            } else if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
                 val logoMatch = logoRegex.find(trimmed)
                 currentLogo = (logoMatch?.groups?.get(1)?.value
                     ?: logoMatch?.groups?.get(2)?.value
                     ?: logoMatch?.groups?.get(3)?.value ?: "").trim()
+
+                val idMatch = idRegex.find(trimmed)
+                currentTvgId = (idMatch?.groups?.get(1)?.value
+                    ?: idMatch?.groups?.get(2)?.value
+                    ?: idMatch?.groups?.get(3)?.value ?: "").trim()
 
                 val groupMatch = groupRegex.find(trimmed)
                 val groupFound = (groupMatch?.groups?.get(1)?.value
@@ -388,8 +455,8 @@ class MainActivity : AppCompatActivity() {
                     tempCategories.add(currentGroup)
                 }
             } else if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
-                val name = if (currentName.isNotEmpty()) currentName else "Kanal $counter"
-                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Digər"
+                val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
+                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Другие"
                 tempCategories.add(cat)
                 tempChannels.add(
                     Channel(
@@ -397,11 +464,12 @@ class MainActivity : AppCompatActivity() {
                         name = name,
                         logoUrl = currentLogo,
                         streamUrl = trimmed,
-                        category = cat
+                        category = cat,
+                        tvgId = currentTvgId
                     )
                 )
                 counter++
-                currentName = ""; currentLogo = ""; currentGroup = ""
+                currentName = ""; currentLogo = ""; currentGroup = ""; currentTvgId = ""
             }
         }
 
@@ -409,6 +477,151 @@ class MainActivity : AppCompatActivity() {
         allChannels.addAll(tempChannels)
         categories.clear()
         categories.addAll(tempCategories)
+    }
+
+    private fun fetchEPG(epgUrl: String) {
+        val client = OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .cache(null)
+            .build()
+
+        val request = Request.Builder()
+            .url(epgUrl)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("User-Agent", "Mozilla/5.0")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {}
+
+            override fun onResponse(call: Call, response: Response) {
+                val bodyStream = response.body?.byteStream() ?: return
+                try {
+                    val isGzip = epgUrl.endsWith(".gz", ignoreCase = true) ||
+                            response.header("Content-Encoding")?.contains("gzip", ignoreCase = true) == true
+                    val inputStream: InputStream = if (isGzip) GZIPInputStream(bodyStream) else bodyStream
+                    parseXmlTvStream(inputStream)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    try {
+                        bodyStream.close()
+                    } catch (_: Exception) {}
+                }
+            }
+        })
+    }
+
+    private fun parseXmlTvStream(inputStream: InputStream) {
+        val parser = Xml.newPullParser()
+        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+        parser.setInput(inputStream, null)
+
+        val now = System.currentTimeMillis()
+        val channelIdToDisplayName = HashMap<String, String>()
+        val tempEpg = HashMap<String, String>()
+
+        var eventType = parser.eventType
+        var currentChannelId = ""
+        var inChannel = false
+        var inProgramme = false
+        var progChannel = ""
+        var isCurrentProg = false
+        var progTitle = ""
+
+        while (eventType != XmlPullParser.END_DOCUMENT) {
+            when (eventType) {
+                XmlPullParser.START_TAG -> {
+                    when (parser.name) {
+                        "channel" -> {
+                            inChannel = true
+                            currentChannelId = parser.getAttributeValue(null, "id")?.trim() ?: ""
+                        }
+                        "display-name" -> {
+                            if (inChannel && currentChannelId.isNotEmpty()) {
+                                val dName = parser.nextText().trim()
+                                if (dName.isNotEmpty()) {
+                                    channelIdToDisplayName[currentChannelId] = dName.lowercase(Locale.ROOT)
+                                }
+                            }
+                        }
+                        "programme" -> {
+                            val startStr = parser.getAttributeValue(null, "start") ?: ""
+                            val stopStr = parser.getAttributeValue(null, "stop") ?: ""
+                            progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
+                            val startMs = parseXmlTvTime(startStr)
+                            val stopMs = parseXmlTvTime(stopStr)
+                            if (now in startMs..stopMs && progChannel.isNotEmpty()) {
+                                inProgramme = true
+                                isCurrentProg = true
+                                progTitle = ""
+                            }
+                        }
+                        "title" -> {
+                            if (inProgramme && isCurrentProg) {
+                                progTitle = parser.nextText().trim()
+                            }
+                        }
+                    }
+                }
+                XmlPullParser.END_TAG -> {
+                    when (parser.name) {
+                        "channel" -> {
+                            inChannel = false
+                            currentChannelId = ""
+                        }
+                        "programme" -> {
+                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty()) {
+                                tempEpg[progChannel.lowercase(Locale.ROOT)] = progTitle
+                                val dName = channelIdToDisplayName[progChannel]
+                                if (dName != null) {
+                                    tempEpg[dName] = progTitle
+                                }
+                            }
+                            inProgramme = false
+                            isCurrentProg = false
+                        }
+                    }
+                }
+            }
+            eventType = parser.next()
+        }
+
+        epgMap.clear()
+        epgMap.putAll(tempEpg)
+
+        runOnUiThread {
+            recyclerViewChannels.adapter?.notifyDataSetChanged()
+            if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
+                showInfoBanner(allChannels[currentPlayingIndexInAll])
+            }
+        }
+    }
+
+    private fun parseXmlTvTime(timeStr: String): Long {
+        if (timeStr.length < 14) return 0L
+        return try {
+            val clean = timeStr.trim()
+            val format = if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
+                SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+            } else {
+                SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+            }
+            format.parse(clean)?.time ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private fun getProgramForChannel(ch: Channel): String {
+        if (epgMap.isEmpty()) return ""
+        if (ch.tvgId.isNotEmpty()) {
+            epgMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
+        }
+        epgMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
+        return ""
     }
 
     private fun filterChannels(category: String) {
@@ -506,16 +719,16 @@ class MainActivity : AppCompatActivity() {
                 iconView.text = when (cat) {
                     "Все" -> "☰"
                     "Избранное" -> "★"
-                    else -> "📁"
+                    else -> "•"
                 }
 
                 val catFocusedBg = GradientDrawable().apply {
                     setColor(Color.parseColor("#2979FF"))
                     cornerRadius = 14f
-                    setStroke(3, Color.parseColor("#82B1FF"))
+                    setStroke(3, Color.parseColor("#FFFFFF"))
                 }
                 val catDefaultBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#151A22"))
+                    setColor(Color.parseColor("#4D151A22"))
                     cornerRadius = 14f
                 }
 
@@ -529,9 +742,9 @@ class MainActivity : AppCompatActivity() {
                         arrowView.setTextColor(Color.WHITE)
                     } else {
                         row.background = catDefaultBg
-                        titleView.setTextColor(Color.parseColor("#CFD8DC"))
-                        iconView.setTextColor(Color.parseColor("#78909C"))
-                        arrowView.setTextColor(Color.parseColor("#546E7A"))
+                        titleView.setTextColor(Color.parseColor("#ECEFF1"))
+                        iconView.setTextColor(Color.parseColor("#90A4AE"))
+                        arrowView.setTextColor(Color.parseColor("#90A4AE"))
                     }
                 }
 
@@ -574,12 +787,22 @@ class MainActivity : AppCompatActivity() {
                 val tvNum = holder.itemView.findViewById<TextView>(R.id.tvNumber)
                 val imgLogo = holder.itemView.findViewById<ImageView>(R.id.imgLogo)
                 val tvName = holder.itemView.findViewById<TextView>(R.id.tvName)
+                val tvProg = holder.itemView.findViewById<TextView>(R.id.tvProgramInfo)
                 val tvFavStar = holder.itemView.findViewById<TextView>(R.id.tvFavStar)
 
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                if (favoriteUrls?.contains(ch.streamUrl) == true) {
+                val currentProg = getProgramForChannel(ch)
+                if (currentProg.isNotEmpty()) {
+                    tvProg?.text = currentProg
+                    tvProg?.visibility = View.VISIBLE
+                } else {
+                    tvProg?.text = ""
+                    tvProg?.visibility = View.GONE
+                }
+
+                if (favoriteUrls.contains(ch.streamUrl)) {
                     tvFavStar?.visibility = View.VISIBLE
                 } else {
                     tvFavStar?.visibility = View.GONE
@@ -595,10 +818,10 @@ class MainActivity : AppCompatActivity() {
                 val cardFocusedBg = GradientDrawable().apply {
                     setColor(Color.parseColor("#2979FF"))
                     cornerRadius = 14f
-                    setStroke(3, Color.parseColor("#E0E0E0"))
+                    setStroke(3, Color.parseColor("#FFFFFF"))
                 }
                 val cardDefaultBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#151A22"))
+                    setColor(Color.parseColor("#4D151A22"))
                     cornerRadius = 14f
                 }
 
@@ -609,10 +832,12 @@ class MainActivity : AppCompatActivity() {
                         row.background = cardFocusedBg
                         tvNum.setTextColor(Color.WHITE)
                         tvName.setTextColor(Color.WHITE)
+                        tvProg?.setTextColor(Color.parseColor("#E3F2FD"))
                     } else {
                         row.background = cardDefaultBg
-                        tvNum.setTextColor(Color.parseColor("#78909C"))
-                        tvName.setTextColor(Color.parseColor("#ECEFF1"))
+                        tvNum.setTextColor(Color.parseColor("#B0BEC5"))
+                        tvName.setTextColor(Color.parseColor("#FFFFFF"))
+                        tvProg?.setTextColor(Color.parseColor("#90A4AE"))
                     }
                 }
 
@@ -626,7 +851,24 @@ class MainActivity : AppCompatActivity() {
 
                 row.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        // Круговая прокрутка с 1-го канала вверх на последний (например, 1174)
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0 && displayedChannels.size > 1) {
+                            val lastIndex = displayedChannels.size - 1
+                            recyclerViewChannels.scrollToPosition(lastIndex)
+                            recyclerViewChannels.post {
+                                recyclerViewChannels.findViewHolderForAdapterPosition(lastIndex)?.itemView?.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        }
+                        // Круговая прокрутка с последнего канала вниз на 1-й
+                        else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && position == displayedChannels.size - 1 && displayedChannels.size > 1) {
+                            recyclerViewChannels.scrollToPosition(0)
+                            recyclerViewChannels.post {
+                                recyclerViewChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        }
+                        else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                             channelPanel.visibility = View.GONE
                             categoryPanel.visibility = View.VISIBLE
                             val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
@@ -658,6 +900,11 @@ class MainActivity : AppCompatActivity() {
         currentPlayingIndexInAll = index
         val channel = allChannels[index]
 
+        getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            .edit()
+            .putString("LAST_CHANNEL_URL", channel.streamUrl)
+            .apply()
+
         initPlayer()
         val streamUri = Uri.parse(channel.streamUrl)
         val mediaItem = MediaItem.fromUri(streamUri)
@@ -672,8 +919,10 @@ class MainActivity : AppCompatActivity() {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★" else ""
+        val currentProg = getProgramForChannel(channel)
+        val progText = if (currentProg.isNotEmpty()) "  |  📺 $currentProg" else ""
 
-        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
+        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav$progText"
 
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
@@ -761,7 +1010,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 this.doubleBackToExitPressedOnce = true
-                Toast.makeText(this, "Çıxmaq üçün geri düyməsini bir daha basın", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Нажмите еще раз для выхода", Toast.LENGTH_SHORT).show()
                 handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
                 return true
             }
@@ -811,7 +1060,7 @@ class MainActivity : AppCompatActivity() {
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
-            else { Toast.makeText(applicationContext, "Tapılmadı", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
+            else { Toast.makeText(applicationContext, "Не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
         }
         digitInputBuffer.clear()
     }
