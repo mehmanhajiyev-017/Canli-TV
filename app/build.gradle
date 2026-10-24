@@ -12,7 +12,7 @@ android {
         minSdk 21
         targetSdk 34
         
-        def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "85").toInteger()
+        def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "33").toInteger()
         versionCode runNumber
         versionName "1.0.${runNumber}"
 
