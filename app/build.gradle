@@ -4,16 +4,17 @@ plugins {
 }
 
 android {
-    namespace 'com.livetv.hajiyev'
+    namespace 'com.canlitv.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.livetv.hajiyev"
+        applicationId "com.canlitv.app"
         minSdk 21
         targetSdk 34
         
-        def runNumber = System.getenv("GITHUB_RUN_NUMBER") ?: "32"
-        versionCode runNumber.toInteger()
+        // GitHub Actions-dakı nömrəni götürür, yoxdursa 33-dən başlayır
+        def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "33").toInteger()
+        versionCode runNumber
         versionName "1.0.${runNumber}"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
