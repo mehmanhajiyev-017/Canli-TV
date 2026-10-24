@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Xml
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Button
@@ -34,35 +33,14 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
-import org.xmlpull.v1.XmlPullParser
-import java.io.BufferedInputStream
 import java.io.IOException
-import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.zip.GZIPInputStream
 
 data class Channel(
     val number: Int,
     val name: String,
     val logoUrl: String,
     val streamUrl: String,
-    val category: String,
-    val tvgId: String = "",
-    val tvgName: String = "",
-    val cleanKey: String = ""
-)
-
-data class EpgProgram(
-    val startMs: Long,
-    val stopMs: Long,
-    val title: String
+    val category: String
 )
 
 class MainActivity : AppCompatActivity() {
@@ -93,17 +71,9 @@ class MainActivity : AppCompatActivity() {
     private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
 
-    private var detectedTimeZone: TimeZone = TimeZone.getTimeZone("GMT+04:00")
-    private var m3uEmbeddedEpgUrl: String = ""
-
-    private val epgProgramsByChannelId = ConcurrentHashMap<String, MutableList<EpgProgram>>()
-    private val epgLookupToChannelId = ConcurrentHashMap<String, String>()
-    private val fallbackEpgUrl = "https://iptvx.one/epg/epg_lite.xml.gz"
-
-    private var currentPlayingIndexInAll = 0
+    private var currentPlayingIndexInAll = -1
     private var previousPlayingIndexInAll = -1
     private val handler = Handler(Looper.getMainLooper())
-    private val backgroundExecutor = Executors.newSingleThreadExecutor()
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
@@ -133,7 +103,6 @@ class MainActivity : AppCompatActivity() {
 
         loadFavorites()
         initNumpadButtons()
-        detectTimeZoneByIpHttps()
 
         btnOpenSearch.setOnClickListener {
             categoryPanel.visibility = View.GONE
@@ -241,36 +210,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun detectTimeZoneByIpHttps() {
-        val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).build()
-        val request = Request.Builder().url("https://ipwho.is/").header("User-Agent", "Mozilla/5.0").build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {}
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val body = response.body?.string() ?: return
-                    val json = JSONObject(body)
-                    if (json.optBoolean("success", false)) {
-                        val tzId = json.optJSONObject("timezone")?.optString("id", "") ?: ""
-                        if (tzId.isNotEmpty()) {
-                            detectedTimeZone = TimeZone.getTimeZone(tzId)
-                            TimeZone.setDefault(detectedTimeZone)
-                            runOnUiThread { recyclerViewChannels.adapter?.notifyDataSetChanged() }
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-        })
-    }
-
-    private fun normalizeChannelName(raw: String): String {
-        var s = raw.lowercase(Locale.ROOT)
-        s = s.replace(Regex("\\[.*?]|\\(.*?\\)"), " ")
-        s = s.replace(Regex("\\b(hd|fhd|uhd|4k|sd|hevc|50fps|orig|ge|az|ru|tr|en|ua|kz|am|by|md|uz|tv|channel|канал)\\b"), " ")
-        return s.replace(Regex("[^a-zа-яё0-9əöüğışç]"), "")
-    }
-
     private fun loadFavorites() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         favoriteUrls.clear()
@@ -320,10 +259,19 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.requestFocus()
     }
 
-    // 1.0.32-nin ən stabil işləyən orijinal M3U oxuma bloku
     private fun fetchM3U(url: String, autoPlayFirst: Boolean) {
-        val client = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true).build()
-        val request = Request.Builder().url(url).cacheControl(CacheControl.FORCE_NETWORK).header("User-Agent", "Mozilla/5.0").build()
+        val client = OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder()
+            .url(url)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("User-Agent", "Mozilla/5.0")
+            .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -337,33 +285,21 @@ class MainActivity : AppCompatActivity() {
 
             override fun onResponse(call: Call, response: Response) {
                 val body = response.body?.string() ?: return
-                allChannels.clear()
-                categories.clear()
-                categories.add("Все")
-                categories.add("Избранное")
-                m3uEmbeddedEpgUrl = ""
-
+                
                 parseM3U(body)
 
                 runOnUiThread {
                     setupCategoryAdapter()
                     filterChannels("Все")
 
-                    if (allChannels.isNotEmpty() && autoPlayFirst) {
-                        playChannelByAllIndex(0)
-                    } else if (allChannels.isEmpty()) {
+                    if (allChannels.isNotEmpty()) {
+                        if (autoPlayFirst && currentPlayingIndexInAll == -1) {
+                            playChannelByAllIndex(0)
+                        }
+                    } else {
                         Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
-
-                    val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                    val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
-                    val targetEpgUrl = when {
-                        savedEpg.isNotEmpty() && savedEpg.startsWith("http") -> savedEpg
-                        m3uEmbeddedEpgUrl.isNotEmpty() && m3uEmbeddedEpgUrl.startsWith("http") -> m3uEmbeddedEpgUrl
-                        else -> fallbackEpgUrl
-                    }
-                    fetchEPG(targetEpgUrl)
                 }
             }
         })
@@ -374,225 +310,40 @@ class MainActivity : AppCompatActivity() {
         var currentName = ""
         var currentLogo = ""
         var currentGroup = "Общие"
-        var currentTvgId = ""
-        var currentTvgName = ""
         var counter = 1
+
+        val tempChannels = mutableListOf<Channel>()
+        val tempCategories = mutableSetOf<String>()
+        tempCategories.add("Все")
+        tempCategories.add("Избранное")
 
         for (line in lines) {
             val trimmed = line.trim()
-            if (trimmed.startsWith("#EXTM3U")) {
-                val epgRegex = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
-                val foundEpg = epgRegex.find(trimmed)?.groups?.get(1)?.value ?: ""
-                if (foundEpg.isNotEmpty()) m3uEmbeddedEpgUrl = foundEpg.split(",").first().trim()
-            } else if (trimmed.startsWith("#EXTINF")) {
+            if (trimmed.startsWith("#EXTINF")) {
                 currentLogo = Regex("tvg-logo=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentTvgId = Regex("tvg-id=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
-                currentTvgName = Regex("tvg-name=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: ""
                 currentGroup = Regex("group-title=\"([^\"]+)\"").find(trimmed)?.groups?.get(1)?.value ?: "Общие"
-                if (currentGroup.isNotEmpty() && !categories.contains(currentGroup)) categories.add(currentGroup)
+                if (currentGroup.isNotEmpty()) tempCategories.add(currentGroup)
                 currentName = trimmed.substringAfterLast(",").trim()
             } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
                 val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
-                allChannels.add(
+                tempChannels.add(
                     Channel(
                         number = counter,
                         name = name,
                         logoUrl = currentLogo,
                         streamUrl = trimmed,
-                        category = currentGroup,
-                        tvgId = currentTvgId.lowercase(Locale.ROOT),
-                        tvgName = currentTvgName.lowercase(Locale.ROOT),
-                        cleanKey = normalizeChannelName(name)
+                        category = currentGroup
                     )
                 )
                 counter++
-                currentName = ""; currentLogo = ""; currentGroup = "Общие"; currentTvgId = ""; currentTvgName = ""
+                currentName = ""; currentLogo = ""; currentGroup = "Общие"
             }
         }
-    }
 
-    private fun fetchEPG(epgUrl: String) {
-        val client = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true).connectTimeout(30, TimeUnit.SECONDS).readTimeout(90, TimeUnit.SECONDS).build()
-        val request = Request.Builder().url(epgUrl).header("User-Agent", "Mozilla/5.0").build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
-                    return
-                }
-                val bodyStream = response.body?.byteStream() ?: return
-                
-                backgroundExecutor.execute {
-                    try {
-                        val buffered = BufferedInputStream(bodyStream, 65536)
-                        buffered.mark(4)
-                        val magic = ByteArray(2)
-                        val readLen = buffered.read(magic)
-                        buffered.reset()
-
-                        val isGzip = readLen == 2 && (magic[0].toInt() and 0xFF) == 0x1f && (magic[1].toInt() and 0xFF) == 0x8b
-                        val xmlStream: InputStream = if (isGzip) GZIPInputStream(buffered, 65536) else buffered
-
-                        parseEpgXmlStream(xmlStream)
-
-                        runOnUiThread {
-                            recyclerViewChannels.adapter?.notifyDataSetChanged()
-                            if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
-                                showInfoBanner(allChannels[currentPlayingIndexInAll])
-                            }
-                        }
-                    } catch (_: Exception) {
-                        if (epgUrl != fallbackEpgUrl) fetchEPG(fallbackEpgUrl)
-                    } finally {
-                        try { bodyStream.close() } catch (_: Exception) {}
-                    }
-                }
-            }
-        })
-    }
-
-    private fun parseEpgXmlStream(inputStream: InputStream) {
-        val neededIds = HashSet<String>()
-        val neededCleanKeys = HashMap<String, MutableList<Channel>>()
-
-        for (ch in allChannels) {
-            if (ch.tvgId.isNotEmpty()) neededIds.add(ch.tvgId)
-            if (ch.cleanKey.isNotEmpty()) neededCleanKeys.getOrPut(ch.cleanKey) { mutableListOf() }.add(ch)
-            val exactLower = ch.name.lowercase(Locale.ROOT)
-            neededCleanKeys.getOrPut(exactLower) { mutableListOf() }.add(ch)
-            if (ch.tvgName.isNotEmpty()) neededCleanKeys.getOrPut(ch.tvgName) { mutableListOf() }.add(ch)
-        }
-
-        val now = System.currentTimeMillis()
-        val minTime = now - 4 * 3600 * 1000L
-        val maxTime = now + 12 * 3600 * 1000L
-
-        val parser = Xml.newPullParser()
-        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-        parser.setInput(inputStream, null)
-
-        var eventType = parser.eventType
-        var currentXmlChannelId = ""
-        var inChannel = false
-        var inProgramme = false
-        var progChannel = ""
-        var progStart = 0L
-        var progStop = 0L
-        var progTitle = ""
-
-        while (eventType != XmlPullParser.END_DOCUMENT) {
-            when (eventType) {
-                XmlPullParser.START_TAG -> {
-                    when (parser.name) {
-                        "channel" -> {
-                            inChannel = true
-                            currentXmlChannelId = (parser.getAttributeValue(null, "id") ?: "").lowercase(Locale.ROOT)
-                            if (neededIds.contains(currentXmlChannelId)) {
-                                epgLookupToChannelId[currentXmlChannelId] = currentXmlChannelId
-                            }
-                        }
-                        "display-name" -> {
-                            if (inChannel && currentXmlChannelId.isNotEmpty()) {
-                                val rawDisplay = parser.nextText().trim()
-                                val lowerDisplay = rawDisplay.lowercase(Locale.ROOT)
-                                val cleanDisplay = normalizeChannelName(rawDisplay)
-
-                                if (neededCleanKeys.containsKey(lowerDisplay)) {
-                                    epgLookupToChannelId[lowerDisplay] = currentXmlChannelId
-                                    neededIds.add(currentXmlChannelId)
-                                }
-                                if (cleanDisplay.length >= 2 && neededCleanKeys.containsKey(cleanDisplay)) {
-                                    epgLookupToChannelId[cleanDisplay] = currentXmlChannelId
-                                    neededIds.add(currentXmlChannelId)
-                                }
-                            }
-                        }
-                        "programme" -> {
-                            val chAttr = (parser.getAttributeValue(null, "channel") ?: "").lowercase(Locale.ROOT)
-                            if (neededIds.contains(chAttr)) {
-                                val sTime = parseXmltvDate(parser.getAttributeValue(null, "start") ?: "")
-                                val eTime = parseXmltvDate(parser.getAttributeValue(null, "stop") ?: "")
-                                if (eTime > minTime && sTime < maxTime) {
-                                    inProgramme = true
-                                    progChannel = chAttr
-                                    progStart = sTime
-                                    progStop = eTime
-                                    progTitle = ""
-                                }
-                            }
-                        }
-                        "title" -> {
-                            if (inProgramme && progTitle.isEmpty()) {
-                                progTitle = parser.nextText().trim()
-                            }
-                        }
-                    }
-                }
-                XmlPullParser.END_TAG -> {
-                    when (parser.name) {
-                        "channel" -> { inChannel = false; currentXmlChannelId = "" }
-                        "programme" -> {
-                            if (inProgramme && progTitle.isNotEmpty()) {
-                                epgProgramsByChannelId.getOrPut(progChannel) { mutableListOf() }.add(EpgProgram(progStart, progStop, progTitle))
-                            }
-                            inProgramme = false
-                        }
-                    }
-                }
-            }
-            eventType = parser.next()
-        }
-    }
-
-    private fun parseXmltvDate(raw: String): Long {
-        val clean = raw.trim()
-        if (clean.length < 14) return 0L
-        return try {
-            val datePart = clean.substring(0, 14)
-            val rest = clean.substring(14).trim()
-
-            val tz = if (rest.length >= 5 && (rest.startsWith("+") || rest.startsWith("-"))) {
-                TimeZone.getTimeZone("GMT${rest[0]}${rest.substring(1, 3)}:${rest.substring(3, 5)}")
-            } else {
-                detectedTimeZone
-            }
-
-            val sdf = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-            sdf.timeZone = tz
-            sdf.parse(datePart)?.time ?: 0L
-        } catch (_: Exception) { 0L }
-    }
-
-    private fun getCurrentProgramText(channel: Channel): String {
-        val now = System.currentTimeMillis()
-        val candidateXmlIds = LinkedHashSet<String>()
-
-        if (channel.tvgId.isNotEmpty()) {
-            candidateXmlIds.add(channel.tvgId)
-            epgLookupToChannelId[channel.tvgId]?.let { candidateXmlIds.add(it) }
-        }
-        if (channel.tvgName.isNotEmpty()) {
-            epgLookupToChannelId[channel.tvgName]?.let { candidateXmlIds.add(it) }
-        }
-        epgLookupToChannelId[channel.name.lowercase(Locale.ROOT)]?.let { candidateXmlIds.add(it) }
-        if (channel.cleanKey.isNotEmpty()) {
-            epgLookupToChannelId[channel.cleanKey]?.let { candidateXmlIds.add(it) }
-        }
-
-        for (xmlId in candidateXmlIds) {
-            val programs = epgProgramsByChannelId[xmlId] ?: continue
-            val current = programs.firstOrNull { now in it.startMs..it.stopMs }
-            if (current != null) {
-                val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = detectedTimeZone }
-                return "${timeFmt.format(Date(current.startMs))} - ${timeFmt.format(Date(current.stopMs))}  ${current.title}"
-            }
-        }
-        return "Proqram məlumatı yoxdur"
+        allChannels.clear()
+        allChannels.addAll(tempChannels)
+        categories.clear()
+        categories.addAll(tempCategories)
     }
 
     private fun filterChannels(category: String) {
@@ -725,7 +476,7 @@ class MainActivity : AppCompatActivity() {
 
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
-                tvProg.text = getCurrentProgramText(ch)
+                tvProg.text = "Kanal №${ch.number}"
 
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
@@ -785,11 +536,11 @@ class MainActivity : AppCompatActivity() {
     private fun playChannelByAllIndex(index: Int) {
         if (index !in allChannels.indices) return
         
-        // Əvvəlki kanalı yaddaşa yazırıq
-        if (currentPlayingIndexInAll != index) {
+        // Pultda GERİ (BACK) düyməsi üçün əvvəlki kanalı yaddaşa alırıq
+        if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
             previousPlayingIndexInAll = currentPlayingIndexInAll
         }
-        
+
         currentPlayingIndexInAll = index
         val channel = allChannels[index]
 
@@ -809,10 +560,9 @@ class MainActivity : AppCompatActivity() {
     private fun showInfoBanner(channel: Channel) {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
-        val progText = getCurrentProgramText(channel)
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★ İZBİZ" else ""
 
-        tvBannerCategory.text = if (progText != "Proqram məlumatı yoxdur") "● $progText$isFav" else "● ${channel.category.uppercase()} — $progText$isFav"
+        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
 
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
@@ -854,7 +604,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         when (keyCode) {
-            // Pultda GERİ (BACK) basıldıqda əvvəlki kanala qayıtmaq
+            // Pultda GERİ (BACK) basıldıqda əvvəlki baxılmış kanala qayıdır
             KeyEvent.KEYCODE_BACK -> {
                 if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
                     playChannelByAllIndex(previousPlayingIndexInAll)
@@ -914,7 +664,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        backgroundExecutor.shutdown()
         player.release()
     }
 }
