@@ -410,9 +410,9 @@ class MainActivity : AppCompatActivity() {
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        val groupRegex = Regex("""group-title\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
-        val logoRegex = Regex("""tvg-logo\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
-        val idRegex = Regex("""tvg-id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
+        val groupRegex = Regex("group-title=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        val logoRegex = Regex("tvg-logo=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        val idRegex = Regex("tvg-id=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
         val epgHeaderRegex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
@@ -424,21 +424,10 @@ class MainActivity : AppCompatActivity() {
                     detectedPlaylistEpgUrl = extractedEpg.split(",").first().trim()
                 }
             } else if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
-                val logoMatch = logoRegex.find(trimmed)
-                currentLogo = (logoMatch?.groups?.get(1)?.value
-                    ?: logoMatch?.groups?.get(2)?.value
-                    ?: logoMatch?.groups?.get(3)?.value ?: "").trim()
-
-                val idMatch = idRegex.find(trimmed)
-                currentTvgId = (idMatch?.groups?.get(1)?.value
-                    ?: idMatch?.groups?.get(2)?.value
-                    ?: idMatch?.groups?.get(3)?.value ?: "").trim()
-
-                val groupMatch = groupRegex.find(trimmed)
-                val groupFound = (groupMatch?.groups?.get(1)?.value
-                    ?: groupMatch?.groups?.get(2)?.value
-                    ?: groupMatch?.groups?.get(3)?.value ?: "").trim()
-
+                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                
                 if (groupFound.isNotEmpty()) {
                     currentGroup = groupFound
                     tempCategories.add(currentGroup)
@@ -810,7 +799,6 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                // Убираем вывод EPG из списка каналов (скрываем поле программы на панели)
                 tvProg?.text = ""
                 tvProg?.visibility = View.GONE
 
@@ -926,7 +914,6 @@ class MainActivity : AppCompatActivity() {
         tvBannerName.text = channel.name
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★" else ""
         
-        // Отображаем EPG только для текущего играющего канала с ромбиком 🔹
         val currentProg = getProgramForChannel(channel)
         val progText = if (currentProg.isNotEmpty()) "  |  🔹 $currentProg" else ""
 
