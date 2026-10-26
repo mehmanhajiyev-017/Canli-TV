@@ -19,8 +19,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Gradle Yetkisi Ver
-        run: chmod +x gradlew
+      - name: Gradle Wrappper Yoxla və İcazə Ver
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          else
+            gradle wrapper
+            chmod +x ./gradlew
+          fi
 
       - name: APK Derle (assembleDebug)
         run: ./gradlew assembleDebug --no-daemon
