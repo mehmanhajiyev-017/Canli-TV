@@ -19,14 +19,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Gradle Yetkisi Ver
+      - name: Gradle Quraşdır və APK Derle
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
+          if [ ! -f "./gradlew" ]; then
+            gradle wrapper
           fi
-
-      - name: APK Derle (assembleDebug)
-        run: ./gradlew assembleDebug --no-daemon
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Adı tvapp.apk olaraq dəyişdir
         run: |
