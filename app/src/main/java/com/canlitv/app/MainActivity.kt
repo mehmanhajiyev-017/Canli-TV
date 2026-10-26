@@ -39,6 +39,7 @@ import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 
 data class Channel(
@@ -213,7 +214,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Текст кырларының эче караңгы кала (сылтама күренә), ә ОТМЕНА һәм СОХРАНИТЬ төймәләре зәңгәр була:
     private fun initSettingsPanelFocus() {
         val editInputs = listOf(etM3uUrl, etEpgUrl)
         for (edit in editInputs) {
@@ -411,11 +411,13 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "Mozilla/5.0")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
@@ -429,6 +431,16 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        if (allChannels.isEmpty()) {
+                            Toast.makeText(applicationContext, "Ошибка сервера: ${response.code}", Toast.LENGTH_SHORT).show()
+                            showSettingsDialog()
+                        }
+                    }
+                    return
+                }
+
                 val body = response.body?.string() ?: return
 
                 val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
