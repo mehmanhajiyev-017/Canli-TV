@@ -28,6 +28,7 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
+import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -295,6 +296,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Hər girişdə (tətbiq ön plana gələndə) pleylist və EPG birbaşa şəbəkədən təzələnir
     override fun onStart() {
         super.onStart()
         initPlayer()
@@ -302,7 +304,7 @@ class MainActivity : AppCompatActivity() {
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
         if (savedUrl.isNotEmpty()) {
-            fetchM3U(savedUrl, autoPlay = true)
+            fetchM3U(savedUrl, autoPlay = (player?.isPlaying != true))
         } else {
             showSettingsDialog()
         }
@@ -348,7 +350,11 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(applicationContext, "${channel.name} seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
-        if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
+        if (selectedCategory == "Избранное") {
+            filterChannels("Избранное")
+        } else if (currentFocusPos != -1) {
+            recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
+        }
     }
 
     private fun initNumpadButtons() {
@@ -418,6 +424,9 @@ class MainActivity : AppCompatActivity() {
 
         val request = Request.Builder()
             .url(url)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("Pragma", "no-cache")
             .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
             .build()
 
@@ -575,6 +584,9 @@ class MainActivity : AppCompatActivity() {
 
         val request = Request.Builder()
             .url(epgUrl)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("Pragma", "no-cache")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
             .build()
 
@@ -644,7 +656,6 @@ class MainActivity : AppCompatActivity() {
                             val startMs = parseXmlTvTime(startStr)
                             val stopMs = parseXmlTvTime(stopStr)
                             
-                            // Televizorun yerli saatına (IP saatına) tam uyğun yoxlama
                             if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
                                 inProgramme = true
                                 isCurrentProg = true
@@ -699,7 +710,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Saat qurşağını cihazın/IP-nin yerli vaxtına tam uyğunlaşdıran metod
     private fun parseXmlTvTime(timeStr: String): Long {
         if (timeStr.length < 14) return 0L
         val clean = timeStr.trim()
@@ -709,7 +719,6 @@ class MainActivity : AppCompatActivity() {
                 format.parse(clean)?.time ?: 0L
             } else {
                 val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-                // Əgər saat qurşağı yazılmayıbsa, cihazın yerli saat qurşağı (IP vaxtı) əsas götürülür
                 format.timeZone = TimeZone.getDefault()
                 format.parse(clean.substring(0, 14))?.time ?: 0L
             }
@@ -720,17 +729,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun getProgramForChannel(ch: Channel): String {
         if (epgMap.isEmpty()) return ""
-        
-        // 1. tvg-id üzrə yoxlama
         if (ch.tvgId.isNotEmpty()) {
             epgMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
-        // 2. Təmizlənmiş kanal adı üzrə yoxlama
         val normalized = normalizeName(ch.name)
         if (normalized.isNotEmpty()) {
             epgMap[normalized]?.let { return it }
         }
-        // 3. Sadə kiçik hərflərlə birbaşa yoxlama
         epgMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
         return ""
     }
@@ -1020,6 +1025,28 @@ class MainActivity : AppCompatActivity() {
         showInfoBanner(channel)
     }
 
+    private fun stepChannelInCurrentCategory(step: Int) {
+        val list = if (displayedChannels.isNotEmpty()) displayedChannels else allChannels
+        if (list.isEmpty()) return
+
+        val currentPlayingChannel = if (currentPlayingIndexInAll in allChannels.indices) {
+            allChannels[currentPlayingIndexInAll]
+        } else null
+
+        val currentPosInDisplayed = list.indexOfFirst { it.streamUrl == currentPlayingChannel?.streamUrl }
+        val nextPos = if (currentPosInDisplayed != -1) {
+            (currentPosInDisplayed + step + list.size) % list.size
+        } else {
+            0
+        }
+
+        val targetChannel = list[nextPos]
+        val targetIndexInAll = allChannels.indexOf(targetChannel)
+        if (targetIndexInAll != -1) {
+            playChannelByAllIndex(targetIndexInAll)
+        }
+    }
+
     private fun showInfoBanner(channel: Channel) {
         tvBannerNumber.text = channel.number.toString()
         tvBannerName.text = channel.name
@@ -1127,13 +1154,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                if (allChannels.isNotEmpty()) { playChannelByAllIndex((currentPlayingIndexInAll + 1) % allChannels.size); return true }
+                stepChannelInCurrentCategory(1)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (allChannels.isNotEmpty()) {
-                    playChannelByAllIndex(if (currentPlayingIndexInAll - 1 < 0) allChannels.size - 1 else currentPlayingIndexInAll - 1)
-                    return true
-                }
+                stepChannelInCurrentCategory(-1)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanelCenteredOnCurrent(); return true }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
