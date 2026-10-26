@@ -28,6 +28,7 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
+import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -137,7 +138,6 @@ class MainActivity : AppCompatActivity() {
 
         loadFavorites()
         initNumpadButtons()
-        initSettingsPanelFocus()
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -214,63 +214,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initSettingsPanelFocus() {
-        val editInputs = listOf(etM3uUrl, etEpgUrl)
-        for (edit in editInputs) {
-            edit.backgroundTintList = null
-            val defaultEditBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#1A212D"))
-                cornerRadius = 12f
-                setStroke(2, Color.parseColor("#55FFFFFF"))
-            }
-            val focusedEditBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#1A212D"))
-                cornerRadius = 12f
-                setStroke(3, Color.parseColor("#2979FF"))
-            }
-            edit.background = defaultEditBg
-            edit.setTextColor(Color.WHITE)
-            edit.setHintTextColor(Color.parseColor("#90A4AE"))
-            edit.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    edit.background = focusedEditBg
-                } else {
-                    edit.background = defaultEditBg
-                }
-            }
-        }
-
-        val dialogButtons = listOf(btnSaveUrl, btnCloseSettings)
-        for (btn in dialogButtons) {
-            btn.backgroundTintList = null
-            val defaultBtnBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#4D151A22"))
-                cornerRadius = 14f
-                setStroke(2, Color.parseColor("#55FFFFFF"))
-            }
-            val focusedBtnBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#2979FF"))
-                cornerRadius = 14f
-                setStroke(3, Color.parseColor("#FFFFFF"))
-            }
-            btn.background = defaultBtnBg
-            btn.setTextColor(Color.parseColor("#ECEFF1"))
-            btn.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    btn.background = focusedBtnBg
-                    btn.setTextColor(Color.WHITE)
-                } else {
-                    btn.background = defaultBtnBg
-                    btn.setTextColor(Color.parseColor("#ECEFF1"))
-                }
-            }
-        }
-    }
-
     private fun initPlayer() {
         if (player == null) {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("Mozilla/5.0")
+                .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                 .setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(15000)
                 .setReadTimeoutMs(15000)
@@ -351,52 +298,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initNumpadButtons() {
-        val buttonIds = listOf(
-            R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3,
-            R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7,
-            R.id.btn8, R.id.btn9, R.id.btnClear, R.id.btnGo
-        )
-
-        for (id in buttonIds) {
-            val btn = findViewById<Button>(id) ?: continue
-            btn.backgroundTintList = null
-            val defaultBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#4D151A22"))
-                cornerRadius = 14f
-                setStroke(2, Color.parseColor("#33FFFFFF"))
-            }
-            val focusedBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#2979FF"))
-                cornerRadius = 14f
-                setStroke(3, Color.parseColor("#FFFFFF"))
-            }
-            btn.background = defaultBg
-            btn.setTextColor(Color.parseColor("#ECEFF1"))
-            btn.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    btn.background = focusedBg
-                    btn.setTextColor(Color.WHITE)
-                } else {
-                    btn.background = defaultBg
-                    btn.setTextColor(Color.parseColor("#ECEFF1"))
-                }
-            }
-        }
-
         val buttons = mapOf(
             R.id.btn0 to 0, R.id.btn1 to 1, R.id.btn2 to 2, R.id.btn3 to 3,
             R.id.btn4 to 4, R.id.btn5 to 5, R.id.btn6 to 6, R.id.btn7 to 7,
             R.id.btn8 to 8, R.id.btn9 to 9
         )
         for ((id, digit) in buttons) {
-            findViewById<Button>(id)?.setOnClickListener { appendNumpadDigit(digit) }
+            findViewById<Button>(id).setOnClickListener { appendNumpadDigit(digit) }
         }
-        findViewById<Button>(R.id.btnClear)?.setOnClickListener {
+        findViewById<Button>(R.id.btnClear).setOnClickListener {
             digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
             digitInputBuffer.clear()
             tvNumpadDisplay.text = "---"
         }
-        findViewById<Button>(R.id.btnGo)?.setOnClickListener { executeNumpadSearch() }
+        findViewById<Button>(R.id.btnGo).setOnClickListener { executeNumpadSearch() }
     }
 
     private fun showSettingsDialog() {
@@ -404,7 +319,7 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         linkDialogPanel.visibility = View.VISIBLE
-        btnSaveUrl.requestFocus()
+        etM3uUrl.requestFocus()
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
@@ -413,10 +328,13 @@ class MainActivity : AppCompatActivity() {
             .followSslRedirects(true)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .cache(null)
             .build()
 
         val request = Request.Builder()
             .url(url)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
 
@@ -424,7 +342,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -434,7 +352,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     runOnUiThread {
                         if (allChannels.isEmpty()) {
-                            Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
                     }
@@ -481,7 +399,7 @@ class MainActivity : AppCompatActivity() {
                             currentPlayingIndexInAll = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Pleylistdə kanallar tapılmadı", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleylistdə kanallar tapılmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -503,9 +421,9 @@ class MainActivity : AppCompatActivity() {
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        val groupRegex = Regex("""group-title\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
-        val logoRegex = Regex("""tvg-logo\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
-        val idRegex = Regex("""tvg-id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,]+))""", RegexOption.IGNORE_CASE)
+        val groupRegex = Regex("group-title=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        val logoRegex = Regex("tvg-logo=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
+        val idRegex = Regex("tvg-id=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
         val epgHeaderRegex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
@@ -517,21 +435,10 @@ class MainActivity : AppCompatActivity() {
                     detectedPlaylistEpgUrl = extractedEpg.split(",").first().trim()
                 }
             } else if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
-                val logoMatch = logoRegex.find(trimmed)
-                currentLogo = (logoMatch?.groups?.get(1)?.value
-                    ?: logoMatch?.groups?.get(2)?.value
-                    ?: logoMatch?.groups?.get(3)?.value ?: "").trim()
-
-                val idMatch = idRegex.find(trimmed)
-                currentTvgId = (idMatch?.groups?.get(1)?.value
-                    ?: idMatch?.groups?.get(2)?.value
-                    ?: idMatch?.groups?.get(3)?.value ?: "").trim()
-
-                val groupMatch = groupRegex.find(trimmed)
-                val groupFound = (groupMatch?.groups?.get(1)?.value
-                    ?: groupMatch?.groups?.get(2)?.value
-                    ?: groupMatch?.groups?.get(3)?.value ?: "").trim()
-
+                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                
                 if (groupFound.isNotEmpty()) {
                     currentGroup = groupFound
                     tempCategories.add(currentGroup)
@@ -572,17 +479,21 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
+            .cache(null)
             .build()
 
         val request = Request.Builder()
             .url(epgUrl)
-            .header("User-Agent", "Mozilla/5.0")
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {}
 
             override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) return
                 val bodyStream = response.body?.byteStream() ?: return
                 try {
                     val isGzip = epgUrl.endsWith(".gz", ignoreCase = true) ||
@@ -606,7 +517,6 @@ class MainActivity : AppCompatActivity() {
         parser.setInput(inputStream, null)
 
         val now = System.currentTimeMillis()
-        val channelIdToDisplayName = HashMap<String, String>()
         val tempEpg = HashMap<String, String>()
 
         var eventType = parser.eventType
@@ -616,6 +526,12 @@ class MainActivity : AppCompatActivity() {
         var progChannel = ""
         var isCurrentProg = false
         var progTitle = ""
+
+        fun cleanKey(text: String): String {
+            return text.lowercase(Locale.ROOT)
+                .replace(Regex("""\b(hd|sd|ru|ua|int|+1|+2|4k|ussr|iptv)\b"""), "")
+                .replace(Regex("""[^a-z0-9а-яё]"""), "")
+        }
 
         while (eventType != XmlPullParser.END_DOCUMENT) {
             when (eventType) {
@@ -629,7 +545,8 @@ class MainActivity : AppCompatActivity() {
                             if (inChannel && currentChannelId.isNotEmpty()) {
                                 val dName = parser.nextText().trim()
                                 if (dName.isNotEmpty()) {
-                                    channelIdToDisplayName[currentChannelId] = dName.lowercase(Locale.ROOT)
+                                    tempEpg[cleanKey(dName)] = ""
+                                    tempEpg[currentChannelId.lowercase(Locale.ROOT)] = dName
                                 }
                             }
                         }
@@ -659,12 +576,8 @@ class MainActivity : AppCompatActivity() {
                             currentChannelId = ""
                         }
                         "programme" -> {
-                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty()) {
-                                tempEpg[progChannel.lowercase(Locale.ROOT)] = progTitle
-                                val dName = channelIdToDisplayName[progChannel]
-                                if (dName != null) {
-                                    tempEpg[dName] = progTitle
-                                }
+                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty() && progChannel.isNotEmpty()) {
+                                tempEpg[progChannel.lowercase(Locale.ROOT) + "_prog"] = progTitle
                             }
                             inProgramme = false
                             isCurrentProg = false
@@ -675,8 +588,20 @@ class MainActivity : AppCompatActivity() {
             eventType = parser.next()
         }
 
+        val finalEpg = HashMap<String, String>()
+        for ((key, value) in tempEpg) {
+            if (key.endsWith("_prog")) {
+                val chId = key.removeSuffix("_prog")
+                val realName = tempEpg[chId]
+                if (realName != null) {
+                    finalEpg[cleanKey(realName)] = value
+                }
+                finalEpg[chId] = value
+            }
+        }
+
         epgMap.clear()
-        epgMap.putAll(tempEpg)
+        epgMap.putAll(finalEpg)
 
         runOnUiThread {
             recyclerViewChannels.adapter?.notifyDataSetChanged()
@@ -703,10 +628,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun getProgramForChannel(ch: Channel): String {
         if (epgMap.isEmpty()) return ""
+        
+        fun cleanKey(text: String): String {
+            return text.lowercase(Locale.ROOT)
+                .replace(Regex("""\b(hd|sd|ru|ua|int|+1|+2|4k|ussr|iptv)\b"""), "")
+                .replace(Regex("""[^a-z0-9а-яё]"""), "")
+        }
+
         if (ch.tvgId.isNotEmpty()) {
             epgMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
-        epgMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
+        epgMap[cleanKey(ch.name)]?.let { return it }
         return ""
     }
 
