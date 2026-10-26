@@ -19,20 +19,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Gradle Quraşdır və APK Derle
+      - name: Gradle Hazırla ve İzin Ver
         run: |
           if [ ! -f "./gradlew" ]; then
             gradle wrapper
           fi
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
 
-      - name: Adı tvapp.apk olaraq dəyişdir
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/tvapp.apk
+      - name: APK Derle (assembleDebug)
+        run: ./gradlew assembleDebug --no-daemon
 
-      - name: tvapp.apk Yüklə (Artifact)
+      - name: app-debug.apk Dosyasını Yükle (Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: tvapp
-          path: app/build/outputs/apk/debug/tvapp.apk
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
