@@ -19,13 +19,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Gradle Wrapper Hazirla
-        run: |
-          gradle wrapper
-          chmod +x ./gradlew
+      - name: Stabil Gradle 8.2 Qurasdir
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
 
       - name: APK Derle
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
       - name: APK Yukle (Artifact)
         uses: actions/upload-artifact@v4
