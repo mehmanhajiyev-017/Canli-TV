@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndexInAll = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "Введите корректную ссылку M3U", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Zəhmət olmasa düzgün M3U linki daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -287,7 +287,7 @@ class MainActivity : AppCompatActivity() {
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Oxutma xətası", Toast.LENGTH_SHORT).show()
                     }
                 }
             })
@@ -341,10 +341,10 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} удален из Избранного", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
@@ -411,8 +411,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -424,7 +424,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
@@ -434,7 +434,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     runOnUiThread {
                         if (allChannels.isEmpty()) {
-                            Toast.makeText(applicationContext, "Ошибка сервера: ${response.code}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_SHORT).show()
                             showSettingsDialog()
                         }
                     }
@@ -481,7 +481,7 @@ class MainActivity : AppCompatActivity() {
                             currentPlayingIndexInAll = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Pleylistdə kanallar tapılmadı", Toast.LENGTH_SHORT).show()
                         showSettingsDialog()
                     }
                 }
