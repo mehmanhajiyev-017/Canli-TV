@@ -28,7 +28,6 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
-import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -112,7 +111,6 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
-        // Yan panellərin və bannerin yarımşəffaf fonu
         categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         channelPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         infoBanner.setBackgroundColor(Color.parseColor("#880B0E14"))
@@ -215,19 +213,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // "Настройки плейлиста" pəncərəsində seçilən xanaların və düymələrin göy rəng olması:
+    // Текст кырларының эче караңгы кала (сылтама күренә), ә ОТМЕНА һәм СОХРАНИТЬ төймәләре зәңгәр була:
     private fun initSettingsPanelFocus() {
         val editInputs = listOf(etM3uUrl, etEpgUrl)
         for (edit in editInputs) {
+            edit.backgroundTintList = null
             val defaultEditBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#1A212D"))
                 cornerRadius = 12f
-                setStroke(2, Color.parseColor("#33FFFFFF"))
+                setStroke(2, Color.parseColor("#55FFFFFF"))
             }
             val focusedEditBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#2979FF"))
+                setColor(Color.parseColor("#1A212D"))
                 cornerRadius = 12f
-                setStroke(3, Color.parseColor("#FFFFFF"))
+                setStroke(3, Color.parseColor("#2979FF"))
             }
             edit.background = defaultEditBg
             edit.setTextColor(Color.WHITE)
@@ -235,22 +234,19 @@ class MainActivity : AppCompatActivity() {
             edit.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     edit.background = focusedEditBg
-                    edit.setTextColor(Color.WHITE)
-                    edit.setHintTextColor(Color.parseColor("#E3F2FD"))
                 } else {
                     edit.background = defaultEditBg
-                    edit.setTextColor(Color.WHITE)
-                    edit.setHintTextColor(Color.parseColor("#90A4AE"))
                 }
             }
         }
 
         val dialogButtons = listOf(btnSaveUrl, btnCloseSettings)
         for (btn in dialogButtons) {
+            btn.backgroundTintList = null
             val defaultBtnBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#4D151A22"))
                 cornerRadius = 14f
-                setStroke(2, Color.parseColor("#33FFFFFF"))
+                setStroke(2, Color.parseColor("#55FFFFFF"))
             }
             val focusedBtnBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#2979FF"))
@@ -363,6 +359,7 @@ class MainActivity : AppCompatActivity() {
 
         for (id in buttonIds) {
             val btn = findViewById<Button>(id) ?: continue
+            btn.backgroundTintList = null
             val defaultBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#4D151A22"))
                 cornerRadius = 14f
@@ -407,7 +404,7 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         linkDialogPanel.visibility = View.VISIBLE
-        etM3uUrl.requestFocus()
+        btnSaveUrl.requestFocus()
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
@@ -418,7 +415,6 @@ class MainActivity : AppCompatActivity() {
 
         val request = Request.Builder()
             .url(url)
-            .cacheControl(CacheControl.FORCE_NETWORK)
             .header("User-Agent", "Mozilla/5.0")
             .build()
 
