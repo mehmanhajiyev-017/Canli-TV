@@ -28,7 +28,6 @@ import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
 import com.google.android.exoplayer2.ui.PlayerView
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
-import okhttp3.CacheControl
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -138,6 +137,7 @@ class MainActivity : AppCompatActivity() {
 
         loadFavorites()
         initNumpadButtons()
+        initSettingsPanelFocus()
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -145,9 +145,9 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
         val settingsFocusedBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#2979FF"))
+            setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
             cornerRadius = 14f
-            setStroke(3, Color.parseColor("#FFFFFF"))
+            setStroke(2, Color.parseColor("#80FFFFFF"))
         }
 
         btnOpenSettings.background = settingsDefaultBg
@@ -214,10 +214,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun initSettingsPanelFocus() {
+        val editInputs = listOf(etM3uUrl, etEpgUrl)
+        for (edit in editInputs) {
+            edit.backgroundTintList = null
+            val defaultEditBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#1A212D"))
+                cornerRadius = 12f
+                setStroke(2, Color.parseColor("#55FFFFFF"))
+            }
+            val focusedEditBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#1A212D"))
+                cornerRadius = 12f
+                setStroke(3, Color.parseColor("#2979FF"))
+            }
+            edit.background = defaultEditBg
+            edit.setTextColor(Color.WHITE)
+            edit.setHintTextColor(Color.parseColor("#90A4AE"))
+            edit.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    edit.background = focusedEditBg
+                } else {
+                    edit.background = defaultEditBg
+                }
+            }
+        }
+
+        val dialogButtons = listOf(btnSaveUrl, btnCloseSettings)
+        for (btn in dialogButtons) {
+            btn.backgroundTintList = null
+            val defaultBtnBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#4D151A22"))
+                cornerRadius = 14f
+                setStroke(2, Color.parseColor("#55FFFFFF"))
+            }
+            val focusedBtnBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+                cornerRadius = 14f
+                setStroke(2, Color.parseColor("#80FFFFFF"))
+            }
+            btn.background = defaultBtnBg
+            btn.setTextColor(Color.parseColor("#ECEFF1"))
+            btn.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    btn.background = focusedBtnBg
+                    btn.setTextColor(Color.WHITE)
+                } else {
+                    btn.background = defaultBtnBg
+                    btn.setTextColor(Color.parseColor("#ECEFF1"))
+                }
+            }
+        }
+    }
+
     private fun initPlayer() {
         if (player == null) {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                .setUserAgent("Mozilla/5.0")
                 .setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(15000)
                 .setReadTimeoutMs(15000)
@@ -298,20 +351,52 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initNumpadButtons() {
+        val buttonIds = listOf(
+            R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3,
+            R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7,
+            R.id.btn8, R.id.btn9, R.id.btnClear, R.id.btnGo
+        )
+
+        for (id in buttonIds) {
+            val btn = findViewById<Button>(id) ?: continue
+            btn.backgroundTintList = null
+            val defaultBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#4D151A22"))
+                cornerRadius = 14f
+                setStroke(2, Color.parseColor("#33FFFFFF"))
+            }
+            val focusedBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+                cornerRadius = 14f
+                setStroke(2, Color.parseColor("#80FFFFFF"))
+            }
+            btn.background = defaultBg
+            btn.setTextColor(Color.parseColor("#ECEFF1"))
+            btn.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    btn.background = focusedBg
+                    btn.setTextColor(Color.WHITE)
+                } else {
+                    btn.background = defaultBg
+                    btn.setTextColor(Color.parseColor("#ECEFF1"))
+                }
+            }
+        }
+
         val buttons = mapOf(
             R.id.btn0 to 0, R.id.btn1 to 1, R.id.btn2 to 2, R.id.btn3 to 3,
             R.id.btn4 to 4, R.id.btn5 to 5, R.id.btn6 to 6, R.id.btn7 to 7,
             R.id.btn8 to 8, R.id.btn9 to 9
         )
         for ((id, digit) in buttons) {
-            findViewById<Button>(id).setOnClickListener { appendNumpadDigit(digit) }
+            findViewById<Button>(id)?.setOnClickListener { appendNumpadDigit(digit) }
         }
-        findViewById<Button>(R.id.btnClear).setOnClickListener {
+        findViewById<Button>(R.id.btnClear)?.setOnClickListener {
             digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
             digitInputBuffer.clear()
             tvNumpadDisplay.text = "---"
         }
-        findViewById<Button>(R.id.btnGo).setOnClickListener { executeNumpadSearch() }
+        findViewById<Button>(R.id.btnGo)?.setOnClickListener { executeNumpadSearch() }
     }
 
     private fun showSettingsDialog() {
@@ -319,7 +404,7 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         linkDialogPanel.visibility = View.VISIBLE
-        etM3uUrl.requestFocus()
+        btnSaveUrl.requestFocus()
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
@@ -328,14 +413,11 @@ class MainActivity : AppCompatActivity() {
             .followSslRedirects(true)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .cache(null)
             .build()
 
         val request = Request.Builder()
             .url(url)
-            .cacheControl(CacheControl.FORCE_NETWORK)
-            .header("Cache-Control", "no-cache, no-store, must-revalidate")
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
@@ -479,14 +561,11 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .cache(null)
             .build()
 
         val request = Request.Builder()
             .url(epgUrl)
-            .cacheControl(CacheControl.FORCE_NETWORK)
-            .header("Cache-Control", "no-cache, no-store, must-revalidate")
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
@@ -741,9 +820,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val catFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#2979FF"))
+                    setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
                     cornerRadius = 14f
-                    setStroke(3, Color.parseColor("#FFFFFF"))
+                    setStroke(2, Color.parseColor("#80FFFFFF"))
                 }
                 val catDefaultBg = GradientDrawable().apply {
                     setColor(Color.parseColor("#4D151A22"))
@@ -828,9 +907,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val cardFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#2979FF"))
+                    setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
                     cornerRadius = 14f
-                    setStroke(3, Color.parseColor("#FFFFFF"))
+                    setStroke(2, Color.parseColor("#80FFFFFF"))
                 }
                 val cardDefaultBg = GradientDrawable().apply {
                     setColor(Color.parseColor("#4D151A22"))
@@ -1017,7 +1096,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 this.doubleBackToExitPressedOnce = true
-                Toast.makeText(this, "Нажмите еще раз для выхода", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Naжмите еще раз для выхода", Toast.LENGTH_SHORT).show()
                 handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
                 return true
             }
