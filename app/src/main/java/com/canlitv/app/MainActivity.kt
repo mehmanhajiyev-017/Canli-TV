@@ -38,6 +38,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
@@ -145,7 +146,7 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
         val settingsFocusedBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+            setColor(Color.parseColor("#402979FF"))
             cornerRadius = 14f
             setStroke(2, Color.parseColor("#80FFFFFF"))
         }
@@ -249,7 +250,7 @@ class MainActivity : AppCompatActivity() {
                 setStroke(2, Color.parseColor("#55FFFFFF"))
             }
             val focusedBtnBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+                setColor(Color.parseColor("#402979FF"))
                 cornerRadius = 14f
                 setStroke(2, Color.parseColor("#80FFFFFF"))
             }
@@ -366,7 +367,7 @@ class MainActivity : AppCompatActivity() {
                 setStroke(2, Color.parseColor("#33FFFFFF"))
             }
             val focusedBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+                setColor(Color.parseColor("#402979FF"))
                 cornerRadius = 14f
                 setStroke(2, Color.parseColor("#80FFFFFF"))
             }
@@ -557,15 +558,24 @@ class MainActivity : AppCompatActivity() {
         categories.addAll(tempCategories)
     }
 
+    private fun normalizeName(text: String): String {
+        return text.lowercase(Locale.ROOT)
+            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps)\b"""), "")
+            .replace(Regex("""[^a-z0-9а-яёәғçşöüı]"""), "")
+            .trim()
+    }
+
     private fun fetchEPG(epgUrl: String) {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
+            .connectTimeout(45, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
             .url(epgUrl)
-            .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
@@ -596,7 +606,8 @@ class MainActivity : AppCompatActivity() {
         parser.setInput(inputStream, null)
 
         val now = System.currentTimeMillis()
-        val tempEpg = HashMap<String, String>()
+        val channelIdToNames = HashMap<String, MutableList<String>>()
+        val tempProgByChannel = HashMap<String, String>()
 
         var eventType = parser.eventType
         var currentChannelId = ""
@@ -606,12 +617,6 @@ class MainActivity : AppCompatActivity() {
         var isCurrentProg = false
         var progTitle = ""
 
-        fun cleanKey(text: String): String {
-            return text.lowercase(Locale.ROOT)
-                .replace(Regex("""\b(hd|sd|ru|ua|int|+1|+2|4k|ussr|iptv)\b"""), "")
-                .replace(Regex("""[^a-z0-9а-яё]"""), "")
-        }
-
         while (eventType != XmlPullParser.END_DOCUMENT) {
             when (eventType) {
                 XmlPullParser.START_TAG -> {
@@ -619,13 +624,16 @@ class MainActivity : AppCompatActivity() {
                         "channel" -> {
                             inChannel = true
                             currentChannelId = parser.getAttributeValue(null, "id")?.trim() ?: ""
+                            if (currentChannelId.isNotEmpty()) {
+                                channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }
+                            }
                         }
                         "display-name" -> {
                             if (inChannel && currentChannelId.isNotEmpty()) {
                                 val dName = parser.nextText().trim()
                                 if (dName.isNotEmpty()) {
-                                    tempEpg[cleanKey(dName)] = ""
-                                    tempEpg[currentChannelId.lowercase(Locale.ROOT)] = dName
+                                    val list = channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }
+                                    list.add(dName)
                                 }
                             }
                         }
@@ -635,7 +643,9 @@ class MainActivity : AppCompatActivity() {
                             progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
                             val startMs = parseXmlTvTime(startStr)
                             val stopMs = parseXmlTvTime(stopStr)
-                            if (now in startMs..stopMs && progChannel.isNotEmpty()) {
+                            
+                            // Televizorun yerli saatına (IP saatına) tam uyğun yoxlama
+                            if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
                                 inProgramme = true
                                 isCurrentProg = true
                                 progTitle = ""
@@ -656,7 +666,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         "programme" -> {
                             if (inProgramme && isCurrentProg && progTitle.isNotEmpty() && progChannel.isNotEmpty()) {
-                                tempEpg[progChannel.lowercase(Locale.ROOT) + "_prog"] = progTitle
+                                tempProgByChannel[progChannel.lowercase(Locale.ROOT)] = progTitle
                             }
                             inProgramme = false
                             isCurrentProg = false
@@ -668,14 +678,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val finalEpg = HashMap<String, String>()
-        for ((key, value) in tempEpg) {
-            if (key.endsWith("_prog")) {
-                val chId = key.removeSuffix("_prog")
-                val realName = tempEpg[chId]
-                if (realName != null) {
-                    finalEpg[cleanKey(realName)] = value
+        for ((chId, title) in tempProgByChannel) {
+            finalEpg[chId] = title
+            val names = channelIdToNames[chId]
+            if (names != null) {
+                for (name in names) {
+                    finalEpg[normalizeName(name)] = title
                 }
-                finalEpg[chId] = value
             }
         }
 
@@ -690,16 +699,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Saat qurşağını cihazın/IP-nin yerli vaxtına tam uyğunlaşdıran metod
     private fun parseXmlTvTime(timeStr: String): Long {
         if (timeStr.length < 14) return 0L
+        val clean = timeStr.trim()
         return try {
-            val clean = timeStr.trim()
-            val format = if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
-                SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
+                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+                format.parse(clean)?.time ?: 0L
             } else {
-                SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                // Əgər saat qurşağı yazılmayıbsa, cihazın yerli saat qurşağı (IP vaxtı) əsas götürülür
+                format.timeZone = TimeZone.getDefault()
+                format.parse(clean.substring(0, 14))?.time ?: 0L
             }
-            format.parse(clean)?.time ?: 0L
         } catch (e: Exception) {
             0L
         }
@@ -708,16 +721,17 @@ class MainActivity : AppCompatActivity() {
     private fun getProgramForChannel(ch: Channel): String {
         if (epgMap.isEmpty()) return ""
         
-        fun cleanKey(text: String): String {
-            return text.lowercase(Locale.ROOT)
-                .replace(Regex("""\b(hd|sd|ru|ua|int|+1|+2|4k|ussr|iptv)\b"""), "")
-                .replace(Regex("""[^a-z0-9а-яё]"""), "")
-        }
-
+        // 1. tvg-id üzrə yoxlama
         if (ch.tvgId.isNotEmpty()) {
             epgMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
-        epgMap[cleanKey(ch.name)]?.let { return it }
+        // 2. Təmizlənmiş kanal adı üzrə yoxlama
+        val normalized = normalizeName(ch.name)
+        if (normalized.isNotEmpty()) {
+            epgMap[normalized]?.let { return it }
+        }
+        // 3. Sadə kiçik hərflərlə birbaşa yoxlama
+        epgMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
         return ""
     }
 
@@ -820,7 +834,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val catFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+                    setColor(Color.parseColor("#402979FF"))
                     cornerRadius = 14f
                     setStroke(2, Color.parseColor("#80FFFFFF"))
                 }
@@ -890,8 +904,14 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                tvProg?.text = ""
-                tvProg?.visibility = View.GONE
+                val currentProg = getProgramForChannel(ch)
+                if (currentProg.isNotEmpty()) {
+                    tvProg?.text = currentProg
+                    tvProg?.visibility = View.VISIBLE
+                } else {
+                    tvProg?.text = ""
+                    tvProg?.visibility = View.GONE
+                }
 
                 if (favoriteUrls.contains(ch.streamUrl)) {
                     tvFavStar?.visibility = View.VISIBLE
@@ -907,7 +927,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val cardFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#402979FF")) // Yüngül şəffaf göy
+                    setColor(Color.parseColor("#402979FF"))
                     cornerRadius = 14f
                     setStroke(2, Color.parseColor("#80FFFFFF"))
                 }
@@ -1096,7 +1116,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 this.doubleBackToExitPressedOnce = true
-                Toast.makeText(this, "Naжмите еще раз для выхода", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Çıxış üçün bir daha basın", Toast.LENGTH_SHORT).show()
                 handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
                 return true
             }
@@ -1146,7 +1166,7 @@ class MainActivity : AppCompatActivity() {
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
-            else { Toast.makeText(applicationContext, "Не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
+            else { Toast.makeText(applicationContext, "Tapılmadı", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
         }
         digitInputBuffer.clear()
     }
