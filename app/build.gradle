@@ -12,7 +12,6 @@ android {
         minSdk 21
         targetSdk 34
         
-        // Hər yeni yığımda versiya avtomatik artır ki, silmədən üzərinə yazılsın (Update olsun)
         def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "100").toInteger() + 100
         versionCode runNumber
         versionName "1.1.${runNumber}"
@@ -36,13 +35,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = '17'
-    }
-
-    // Çıxan faylın adını app-debug.apk yox, birbaşa tvapp.apk edir
-    applicationVariants.all { variant ->
-        variant.outputs.all {
-            outputFileName = "tvapp.apk"
-        }
     }
 }
 
