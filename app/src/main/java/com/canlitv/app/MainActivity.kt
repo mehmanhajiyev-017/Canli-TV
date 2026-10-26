@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndexInAll = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "Введите корректную ссылку M3U", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Zəhmət olmasa düzgün M3U linki daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -234,7 +234,7 @@ class MainActivity : AppCompatActivity() {
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Oxutma xətası baş verdi", Toast.LENGTH_SHORT).show()
                     }
                 }
             })
@@ -288,30 +288,61 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} удален из Избранного", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} добавлен в Избранное", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (currentFocusPos != -1) recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
     }
 
     private fun initNumpadButtons() {
+        val buttonIds = listOf(
+            R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3,
+            R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7,
+            R.id.btn8, R.id.btn9, R.id.btnClear, R.id.btnGo
+        )
+
+        val defaultBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#4D151A22"))
+            cornerRadius = 14f
+        }
+        val focusedBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#2979FF"))
+            cornerRadius = 14f
+            setStroke(3, Color.parseColor("#FFFFFF"))
+        }
+
         val buttons = mapOf(
             R.id.btn0 to 0, R.id.btn1 to 1, R.id.btn2 to 2, R.id.btn3 to 3,
             R.id.btn4 to 4, R.id.btn5 to 5, R.id.btn6 to 6, R.id.btn7 to 7,
             R.id.btn8 to 8, R.id.btn9 to 9
         )
-        for ((id, digit) in buttons) {
-            findViewById<Button>(id).setOnClickListener { appendNumpadDigit(digit) }
+
+        for (id in buttonIds) {
+            val btn = findViewById<Button>(id) ?: continue
+            btn.background = defaultBg
+            btn.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    btn.background = focusedBg
+                    btn.setTextColor(Color.WHITE)
+                } else {
+                    btn.background = defaultBg
+                    btn.setTextColor(Color.parseColor("#ECEFF1"))
+                }
+            }
         }
-        findViewById<Button>(R.id.btnClear).setOnClickListener {
+
+        for ((id, digit) in buttons) {
+            findViewById<Button>(id)?.setOnClickListener { appendNumpadDigit(digit) }
+        }
+        findViewById<Button>(R.id.btnClear)?.setOnClickListener {
             digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
             digitInputBuffer.clear()
             tvNumpadDisplay.text = "---"
         }
-        findViewById<Button>(R.id.btnGo).setOnClickListener { executeNumpadSearch() }
+        findViewById<Button>(R.id.btnGo)?.setOnClickListener { executeNumpadSearch() }
     }
 
     private fun showSettingsDialog() {
@@ -342,7 +373,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_LONG).show()
+                        Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -352,7 +383,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     runOnUiThread {
                         if (allChannels.isEmpty()) {
-                            Toast.makeText(applicationContext, "Ошибка сервера: ${response.code}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
                     }
@@ -399,7 +430,7 @@ class MainActivity : AppCompatActivity() {
                             currentPlayingIndexInAll = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Каналы не найдены в плейлисте", Toast.LENGTH_LONG).show()
+                        Toast.makeText(applicationContext, "Pleylistdə kanallar tapılmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -1017,7 +1048,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 this.doubleBackToExitPressedOnce = true
-                Toast.makeText(this, "Нажмите еще раз для выхода", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Çıxış üçün bir daha basın", Toast.LENGTH_SHORT).show()
                 handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
                 return true
             }
@@ -1039,7 +1070,7 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanelCenteredOnCurrent(); return true }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 numPadPanel.visibility = View.VISIBLE; digitInputBuffer.clear(); tvNumpadDisplay.text = "---"
-                findViewById<Button>(R.id.btn1).post { findViewById<Button>(R.id.btn1).requestFocus() }
+                findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
                 return true
             }
             in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
@@ -1053,7 +1084,7 @@ class MainActivity : AppCompatActivity() {
         tvNumpadDisplay.text = digitInputBuffer.toString()
         if (numPadPanel.visibility != View.VISIBLE) {
             numPadPanel.visibility = View.VISIBLE
-            findViewById<Button>(R.id.btn1).post { findViewById<Button>(R.id.btn1).requestFocus() }
+            findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
         }
         digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { executeNumpadSearch() }
@@ -1067,7 +1098,7 @@ class MainActivity : AppCompatActivity() {
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
-            else { Toast.makeText(applicationContext, "Не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
+            else { Toast.makeText(applicationContext, "Tapılmadı", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
         }
         digitInputBuffer.clear()
     }
