@@ -95,7 +95,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Televizorun yuxu rejiminə keçməsinin qarşısını alır (ekran heç vaxt sönmür)
+        // Ekranin sonmesini ve yuxu rejimini tamamile bloklayir
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
