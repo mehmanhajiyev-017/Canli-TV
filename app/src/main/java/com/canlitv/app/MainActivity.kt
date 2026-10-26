@@ -11,6 +11,7 @@ import android.util.Xml
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
@@ -94,6 +95,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Televizorun yuxu rejiminə keçməsinin qarşısını alır (ekran heç vaxt sönmür)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
         playerView = findViewById(R.id.playerView)
@@ -296,7 +299,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Hər girişdə (tətbiq ön plana gələndə) pleylist və EPG birbaşa şəbəkədən təzələnir
     override fun onStart() {
         super.onStart()
         initPlayer()
