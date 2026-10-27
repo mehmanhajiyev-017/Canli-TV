@@ -5,12 +5,96 @@
     android:background="#000000"
     android:keepScreenOn="true">
 
-    <!-- Видеоплеер ExoPlayer -->
-    <com.google.android.exoplayer2.ui.PlayerView
-        android:id="@+id/playerView"
+    <!-- Контейнер Мульти-экрана (до 4 плееров) -->
+    <LinearLayout
+        android:id="@+id/multiViewContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:focusable="false" />
+        android:orientation="horizontal">
+
+        <!-- Левая колонка / Слот 1 -->
+        <FrameLayout
+            android:id="@+id/slot1Container"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:padding="2dp">
+            <com.google.android.exoplayer2.ui.PlayerView
+                android:id="@+id/playerView1"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:focusable="false" />
+        </FrameLayout>
+
+        <!-- Правая колонка / Слоты 2, 3, 4 -->
+        <LinearLayout
+            android:id="@+id/rightSlotsContainer"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Верхняя правая строка / Слот 2 (+ Слот 4 при 4 экранах) -->
+            <LinearLayout
+                android:id="@+id/rowTopRight"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/slot2Container"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:padding="2dp">
+                    <com.google.android.exoplayer2.ui.PlayerView
+                        android:id="@+id/playerView2"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:focusable="false" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <!-- Нижняя правая строка / Слот 3 и Слот 4 -->
+            <LinearLayout
+                android:id="@+id/rowBottomRight"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:id="@+id/slot3Container"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:padding="2dp">
+                    <com.google.android.exoplayer2.ui.PlayerView
+                        android:id="@+id/playerView3"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:focusable="false" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/slot4Container"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:padding="2dp"
+                    android:visibility="gone">
+                    <com.google.android.exoplayer2.ui.PlayerView
+                        android:id="@+id/playerView4"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:focusable="false" />
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
 
     <!-- Панель категорий (слева) -->
     <LinearLayout
@@ -79,49 +163,71 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Информационный баннер внизу экрана при переключении -->
+    <!-- Информационный баннер внизу экрана с кнопкой Мульти-экрана -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:padding="18dp"
         android:visibility="gone"
         android:elevation="12dp">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <TextView
+                    android:id="@+id/tvBannerNumber"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#2979FF"
+                    android:textSize="26sp"
+                    android:textStyle="bold"
+                    android:layout_marginEnd="12dp" />
+                <TextView
+                    android:id="@+id/tvBannerName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
             <TextView
-                android:id="@+id/tvBannerNumber"
+                android:id="@+id/tvBannerCategory"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="#2979FF"
-                android:textSize="26sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="12dp" />
-            <TextView
-                android:id="@+id/tvBannerName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:textColor="#B0BEC5"
+                android:textSize="14sp"
+                android:layout_marginTop="4dp" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/tvBannerCategory"
+        <!-- Кнопка переключения мульти-экрана -->
+        <Button
+            android:id="@+id/btnMultiScreenToggle"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#B0BEC5"
+            android:layout_height="44dp"
+            android:text="⊞ Экран: 1"
+            android:textColor="#FFFFFF"
             android:textSize="14sp"
-            android:layout_marginTop="4dp" />
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:focusable="true"
+            android:clickable="true" />
     </LinearLayout>
 
-    <!-- Цифровая панель переключения номеров (строго по центру справа) -->
+    <!-- Цифровая панель переключения номеров (по центру справа) -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="220dp"
