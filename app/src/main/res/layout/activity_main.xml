@@ -5,14 +5,14 @@
     android:background="#000000"
     android:keepScreenOn="true">
 
-    <!-- Video Pleyer -->
+    <!-- Видеоплеер ExoPlayer -->
     <com.google.android.exoplayer2.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:focusable="false" />
 
-    <!-- Kateqoriyalar Paneli (Sol) -->
+    <!-- Панель категорий (слева) -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="260dp"
@@ -63,7 +63,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Kanallar Paneli -->
+    <!-- Панель каналов -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="380dp"
@@ -79,7 +79,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Məlumat Banneri (Aşağıda) -->
+    <!-- Информационный баннер внизу экрана при переключении -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -121,7 +121,7 @@
             android:layout_marginTop="4dp" />
     </LinearLayout>
 
-    <!-- Rəqəm Paneli -->
+    <!-- Цифровая панель переключения номеров -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="220dp"
@@ -163,10 +163,10 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Ayarlar Dialoqu -->
+    <!-- Окно настроек плейлиста -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
-        android:layout_width="500dp"
+        android:layout_width="480dp"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
         android:background="#DD111622"
@@ -178,7 +178,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="M3U və EPG Linkləri"
+            android:text="Ссылка на плейлист M3U"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold"
@@ -188,19 +188,17 @@
             android:id="@+id/etM3uUrl"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:hint="M3U Playlist URL"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:layout_marginBottom="12dp" />
-
-        <EditText
-            android:id="@+id/etEpgUrl"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:hint="EPG URL (Boş qala bilər)"
+            android:hint="Вставьте M3U URL"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
             android:layout_marginBottom="18dp" />
+
+        <!-- Скрытое поле для совместимости -->
+        <EditText
+            android:id="@+id/etEpgUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -211,59 +209,14 @@
                 android:id="@+id/btnCloseSettings"
                 android:layout_width="wrap_content"
                 android:layout_height="42dp"
-                android:text="Bağla"
+                android:text="Закрыть"
                 android:layout_marginEnd="10dp" />
             <Button
                 android:id="@+id/btnSaveUrl"
                 android:layout_width="wrap_content"
                 android:layout_height="42dp"
-                android:text="Yadda saxla" />
+                android:text="Сохранить" />
         </LinearLayout>
-    </LinearLayout>
-
-    <!-- SAĞ YUXARI: Yığcam və Zərif Statistika Kartı -->
-    <LinearLayout
-        android:id="@+id/syncStatusCard"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentTop="true"
-        android:layout_marginEnd="28dp"
-        android:layout_marginTop="28dp"
-        android:orientation="vertical"
-        android:paddingStart="14dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:visibility="gone"
-        android:elevation="25dp">
-
-        <TextView
-            android:id="@+id/tvSyncChannels"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Channels: Yüklənir..."
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="2dp" />
-
-        <TextView
-            android:id="@+id/tvSyncLogos"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Logotypes: -"
-            android:textColor="#B0BEC5"
-            android:textSize="12sp"
-            android:layout_marginBottom="2dp" />
-
-        <TextView
-            android:id="@+id/tvSyncPrograms"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Programs: -"
-            android:textColor="#B0BEC5"
-            android:textSize="12sp" />
     </LinearLayout>
 
 </RelativeLayout>
