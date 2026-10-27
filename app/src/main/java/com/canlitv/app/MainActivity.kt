@@ -89,7 +89,6 @@ class MainActivity : AppCompatActivity() {
 
     private val epgMap = ConcurrentHashMap<String, String>()
     private var detectedPlaylistEpgUrl: String = ""
-    private var totalEpgProgramsCount = 0
 
     private var currentPlayingIndexInAll = -1
     private var previousPlayingIndexInAll = -1
@@ -518,7 +517,10 @@ class MainActivity : AppCompatActivity() {
                 if (finalEpgUrl.isNotEmpty() && finalEpgUrl.startsWith("http")) {
                     fetchEPG(finalEpgUrl)
                 } else {
-                    runOnUiThread { scheduleHideSyncCard() }
+                    runOnUiThread {
+                        tvSyncPrograms.text = "Programs: -"
+                        scheduleHideSyncCard()
+                    }
                 }
 
                 runOnUiThread {
@@ -561,18 +563,21 @@ class MainActivity : AppCompatActivity() {
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        val groupRegex = Regex("group-title=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-        val logoRegex = Regex("tvg-logo=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-        val idRegex = Regex("tvg-id=[\"']([^\"']+)[\"']", RegexOption.IGNORE_CASE)
-        val epgHeaderRegex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*(?:"([^"]*)"|'([^']*)')""", RegexOption.IGNORE_CASE)
+        // İstənilən dırnaqlı və ya dırnaqsız formatı tutan təkmil regex
+        val groupRegex = Regex("""group-title\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
+        val logoRegex = Regex("""(?:tvg-logo|logo)\s*=\s*["']?([^"',\s\r\n]+)["']?""", RegexOption.IGNORE_CASE)
+        val idRegex = Regex("""tvg-id\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
+        val epgHeaderRegex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*["']?([^"'\r\n]+)["']?""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
             val trimmed = line.trim()
             if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {
                 val epgMatch = epgHeaderRegex.find(trimmed)
-                val extractedEpg = (epgMatch?.groups?.get(1)?.value ?: epgMatch?.groups?.get(2)?.value ?: "").trim()
-                if (extractedEpg.isNotEmpty()) {
-                    detectedPlaylistEpgUrl = extractedEpg.split(",").first().trim()
+                val rawEpg = epgMatch?.groups?.get(1)?.value?.trim() ?: ""
+                if (rawEpg.isNotEmpty()) {
+                    // Əgər vergüllə bir neçə EPG linki varsa, ilk http ilə başlayanını götür
+                    val candidate = rawEpg.split(",").firstOrNull { it.trim().startsWith("http") }?.trim() ?: ""
+                    if (candidate.isNotEmpty()) detectedPlaylistEpgUrl = candidate
                 }
             } else if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
                 currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
@@ -623,6 +628,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchEPG(epgUrl: String) {
+        runOnUiThread { tvSyncPrograms.text = "Programs: Yüklənir..." }
+
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
@@ -640,12 +647,18 @@ class MainActivity : AppCompatActivity() {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { scheduleHideSyncCard() }
+                runOnUiThread {
+                    tvSyncPrograms.text = "Programs: Tapılmadı"
+                    scheduleHideSyncCard()
+                }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 if (!response.isSuccessful) {
-                    runOnUiThread { scheduleHideSyncCard() }
+                    runOnUiThread {
+                        tvSyncPrograms.text = "Programs: Server xətası"
+                        scheduleHideSyncCard()
+                    }
                     return
                 }
                 val bodyStream = response.body?.byteStream() ?: return
@@ -656,6 +669,7 @@ class MainActivity : AppCompatActivity() {
                     parseXmlTvStream(inputStream)
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    runOnUiThread { tvSyncPrograms.text = "Programs: Format xətası" }
                 } finally {
                     try {
                         bodyStream.close()
@@ -755,12 +769,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        totalEpgProgramsCount = progCounter
         epgMap.clear()
         epgMap.putAll(finalEpg)
 
         runOnUiThread {
-            tvSyncPrograms.text = "Programs: $totalEpgProgramsCount"
+            tvSyncPrograms.text = "Programs: $progCounter"
             recyclerViewChannels.adapter?.notifyDataSetChanged()
             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
                 showInfoBanner(allChannels[currentPlayingIndexInAll])
