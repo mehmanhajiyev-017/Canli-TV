@@ -95,7 +95,6 @@ class MainActivity : AppCompatActivity() {
     private var previousPlayingIndex = -1
     private var doubleBackToExitPressedOnce = false
 
-    // Статические фоны для исключения сборщика мусора (GC) и ускорения фокуса
     private lateinit var rowDefaultBg: GradientDrawable
     private lateinit var rowFocusedBg: GradientDrawable
 
@@ -111,7 +110,6 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
-        // Предварительное создание статических стилей фокуса
         rowDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#33151A22"))
             cornerRadius = 12f
@@ -195,15 +193,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // "Настройки" düyməsində olanda sağa basdıqda Kateqoriyalara qayıdır
         btnOpenSettings.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                     btnOpenSettings.performClick()
                     return@setOnKeyListener true
-                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                    categoryPanel.visibility = View.GONE
-                    channelPanel.visibility = View.VISIBLE
-                    focusCurrentChannelCentered()
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
+                    recyclerViewCategories.post {
+                        recyclerViewCategories.scrollToPosition(catIndex)
+                        val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
+                    }
                     return@setOnKeyListener true
                 }
             }
@@ -212,7 +214,6 @@ class MainActivity : AppCompatActivity() {
 
         initPlayer()
 
-        // Оптимизация списков для мгновенной прокрутки без рывков
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
         recyclerViewChannels.setItemViewCacheSize(20)
@@ -229,7 +230,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "Введите корректный M3U URL", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Düzgün M3U URL daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -241,7 +242,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchEPGDirectly(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "Введите корректный EPG URL", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Düzgün EPG URL daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -270,7 +271,7 @@ class MainActivity : AppCompatActivity() {
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Oxutma xətası", Toast.LENGTH_SHORT).show()
                     }
                 }
             })
@@ -404,10 +405,10 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} удален из избранного", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} добавлен в избранное", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (selectedCategory == "Избранное") {
@@ -495,7 +496,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
-        runOnUiThread { showSyncCard("Channels: Загрузка...", "Logotypes: -", "EPG: -") }
+        runOnUiThread { showSyncCard("Channels: Yüklənir...", "Logotypes: -", "EPG: -") }
 
         val client = OkHttpClient.Builder()
             .followRedirects(true)
@@ -516,7 +517,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_LONG).show()
+                        Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                     scheduleHideSyncCard(1000)
@@ -527,7 +528,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     runOnUiThread {
                         if (allChannels.isEmpty()) {
-                            Toast.makeText(applicationContext, "Ошибка сервера: ${response.code}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
                         scheduleHideSyncCard(1000)
@@ -572,7 +573,7 @@ class MainActivity : AppCompatActivity() {
                             currentPlayingIndex = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_LONG).show()
+                        Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -582,7 +583,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun fetchEPGDirectly(epgUrl: String) {
         runOnUiThread {
-            showSyncCard("Channels: ${allChannels.size}", "Logotypes: ${allChannels.count { it.logoUrl.isNotEmpty() }}", "EPG: Загрузка...")
+            showSyncCard("Channels: ${allChannels.size}", "Logotypes: ${allChannels.count { it.logoUrl.isNotEmpty() }}", "EPG: Yüklənir...")
         }
 
         val client = OkHttpClient.Builder()
@@ -603,7 +604,7 @@ class MainActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
-                    tvSyncPrograms.text = "EPG: Сбой сети"
+                    tvSyncPrograms.text = "EPG: Xəta"
                     scheduleHideSyncCard(2000)
                 }
             }
@@ -611,7 +612,7 @@ class MainActivity : AppCompatActivity() {
             override fun onResponse(call: Call, response: Response) {
                 if (!response.isSuccessful) {
                     runOnUiThread {
-                        tvSyncPrograms.text = "EPG: Ошибка ${response.code}"
+                        tvSyncPrograms.text = "EPG: Xəta ${response.code}"
                         scheduleHideSyncCard(2000)
                     }
                     return
@@ -623,7 +624,6 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
-                // Обработка EPG с пониженным приоритетом потока для плавности UI
                 Thread({
                     var parsedCount = 0
                     try {
@@ -730,7 +730,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     } catch (e: Exception) {
-                        runOnUiThread { tvSyncPrograms.text = "EPG: Ошибка чтения" }
+                        runOnUiThread { tvSyncPrograms.text = "EPG: Xəta" }
                     } finally {
                         try {
                             bodyStream.close()
@@ -964,9 +964,13 @@ class MainActivity : AppCompatActivity() {
 
                 row.setOnClickListener { selectAction() }
 
+                // KATEQORİYALARDA SOLA BASILDIQDA NASTROYKAYA DÜŞMƏ MƏNTİQİ
                 row.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                            btnOpenSettings.requestFocus()
+                            return@setOnKeyListener true
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                             selectAction()
                             return@setOnKeyListener true
                         }
@@ -1138,6 +1142,10 @@ class MainActivity : AppCompatActivity() {
                     categoryPanel.visibility = View.GONE
                     return true
                 }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    btnOpenSettings.requestFocus()
+                    return true
+                }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     categoryPanel.visibility = View.GONE
                     channelPanel.visibility = View.VISIBLE
@@ -1188,7 +1196,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 this.doubleBackToExitPressedOnce = true
-                Toast.makeText(this, "Нажмите еще раз для выхода", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Çıxış üçün bir daha basın", Toast.LENGTH_SHORT).show()
                 handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
                 return true
             }
@@ -1245,7 +1253,7 @@ class MainActivity : AppCompatActivity() {
                 playChannelByIndex(foundIndex)
                 numPadPanel.visibility = View.GONE
             } else {
-                Toast.makeText(applicationContext, "Канал не найден", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
                 tvNumpadDisplay.text = "---"
             }
         }
