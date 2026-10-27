@@ -68,7 +68,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
+    private lateinit var btnRefreshM3u: Button
     private lateinit var btnSaveEpg: Button
+    private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
     private lateinit var recyclerViewChannels: RecyclerView
@@ -129,7 +131,9 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveM3u = findViewById(R.id.btnSaveM3u)
+        btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
         btnSaveEpg = findViewById(R.id.btnSaveEpg)
+        btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
@@ -193,7 +197,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // "Настройки" düyməsində olanda sağa basdıqda Kateqoriyalara qayıdır
         btnOpenSettings.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
@@ -221,6 +224,7 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
 
+        // 1. M3U üçün "OK" düyməsi (Yadda saxlayır və yeniləyir)
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
@@ -234,6 +238,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // M3U üçün "↻" düyməsi (Dərhal təkrar yükləyir)
+        btnRefreshM3u.setOnClickListener {
+            val url = etM3uUrl.text.toString().trim()
+            if (url.isNotEmpty() && url.startsWith("http")) {
+                linkDialogPanel.visibility = View.GONE
+                fetchM3U(url, autoPlay = false)
+            } else {
+                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // 2. EPG üçün "OK" düyməsi (Yadda saxlayır və fon rejimində qəbul edir)
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
@@ -243,6 +259,17 @@ class MainActivity : AppCompatActivity() {
                 fetchEPGDirectly(epgUrl)
             } else {
                 Toast.makeText(applicationContext, "Düzgün EPG URL daxil edin", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // EPG üçün "↻" düyməsi (Dərhal arxa fonda təzələyir)
+        btnRefreshEpg.setOnClickListener {
+            val epgUrl = etEpgUrl.text.toString().trim()
+            if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
+                linkDialogPanel.visibility = View.GONE
+                fetchEPGDirectly(epgUrl)
+            } else {
+                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -326,17 +353,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnSaveEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             val defaultBtnBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#4D151A22"))
-                cornerRadius = 14f
+                cornerRadius = 12f
                 setStroke(2, Color.parseColor("#55FFFFFF"))
             }
             val focusedBtnBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#402979FF"))
-                cornerRadius = 14f
+                cornerRadius = 12f
                 setStroke(2, Color.parseColor("#80FFFFFF"))
             }
             btn.background = defaultBtnBg
@@ -360,12 +387,14 @@ class MainActivity : AppCompatActivity() {
         val savedM3u = prefs.getString("M3U_URL", "") ?: ""
         val savedEpg = prefs.getString("EPG_URL", "") ?: ""
 
+        // TV açılanda fon rejimində avtomatik yenilənmə
         if (savedM3u.isNotEmpty()) {
             fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
         } else {
             showSettingsDialog()
         }
 
+        // EPG varsa ayrıca fon rejimində qəbul olunur
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
             fetchEPGDirectly(savedEpg)
         }
@@ -405,10 +434,10 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} seçilmişlərdən silindi", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} silindi", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} seçilmişlərə əlavə olundu", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, "${channel.name} əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
         if (selectedCategory == "Избранное") {
@@ -495,6 +524,7 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(r, delayMs)
     }
 
+    // Pleylistin yüklənməsi
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         runOnUiThread { showSyncCard("Channels: Yüklənir...", "Logotypes: -", "EPG: -") }
 
@@ -581,6 +611,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // Pleylistdən tam asılı olmayan EPG qəbulu
     private fun fetchEPGDirectly(epgUrl: String) {
         runOnUiThread {
             showSyncCard("Channels: ${allChannels.size}", "Logotypes: ${allChannels.count { it.logoUrl.isNotEmpty() }}", "EPG: Yüklənir...")
@@ -604,7 +635,7 @@ class MainActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
-                    tvSyncPrograms.text = "EPG: Xəta"
+                    tvSyncPrograms.text = "EPG: Şəbəkə xətası"
                     scheduleHideSyncCard(2000)
                 }
             }
@@ -744,6 +775,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // Pleylistdən heç bir EPG linki oxunmur (tam müstəqildir)
     private fun parseM3U(content: String) {
         val lines = content.lines()
         var currentName = ""
@@ -964,7 +996,6 @@ class MainActivity : AppCompatActivity() {
 
                 row.setOnClickListener { selectAction() }
 
-                // KATEQORİYALARDA SOLA BASILDIQDA NASTROYKAYA DÜŞMƏ MƏNTİQİ
                 row.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN) {
                         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
