@@ -22,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackException
@@ -219,12 +220,11 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
-        recyclerViewChannels.setItemViewCacheSize(20)
+        recyclerViewChannels.setItemViewCacheSize(25)
 
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
 
-        // 1. M3U üçün "OK" düyməsi (Yadda saxlayır və yeniləyir)
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
@@ -238,7 +238,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // M3U üçün "↻" düyməsi (Dərhal təkrar yükləyir)
         btnRefreshM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
@@ -249,7 +248,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 2. EPG üçün "OK" düyməsi (Yadda saxlayır və fon rejimində qəbul edir)
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
@@ -262,7 +260,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // EPG üçün "↻" düyməsi (Dərhal arxa fonda təzələyir)
         btnRefreshEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
@@ -358,12 +355,12 @@ class MainActivity : AppCompatActivity() {
             btn.backgroundTintList = null
             val defaultBtnBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#4D151A22"))
-                cornerRadius = 12f
+                cornerRadius = 14f
                 setStroke(2, Color.parseColor("#55FFFFFF"))
             }
             val focusedBtnBg = GradientDrawable().apply {
                 setColor(Color.parseColor("#402979FF"))
-                cornerRadius = 12f
+                cornerRadius = 14f
                 setStroke(2, Color.parseColor("#80FFFFFF"))
             }
             btn.background = defaultBtnBg
@@ -387,14 +384,12 @@ class MainActivity : AppCompatActivity() {
         val savedM3u = prefs.getString("M3U_URL", "") ?: ""
         val savedEpg = prefs.getString("EPG_URL", "") ?: ""
 
-        // TV açılanda fon rejimində avtomatik yenilənmə
         if (savedM3u.isNotEmpty()) {
             fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
         } else {
             showSettingsDialog()
         }
 
-        // EPG varsa ayrıca fon rejimində qəbul olunur
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
             fetchEPGDirectly(savedEpg)
         }
@@ -524,7 +519,6 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(r, delayMs)
     }
 
-    // Pleylistin yüklənməsi
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         runOnUiThread { showSyncCard("Channels: Yüklənir...", "Logotypes: -", "EPG: -") }
 
@@ -611,7 +605,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Pleylistdən tam asılı olmayan EPG qəbulu
     private fun fetchEPGDirectly(epgUrl: String) {
         runOnUiThread {
             showSyncCard("Channels: ${allChannels.size}", "Logotypes: ${allChannels.count { it.logoUrl.isNotEmpty() }}", "EPG: Yüklənir...")
@@ -775,7 +768,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Pleylistdən heç bir EPG linki oxunmur (tam müstəqildir)
+    // Ən elastik loqo tanıma sistemi (həm dırnaqlı, həm dırnaqsız, həm fərqli teqlər)
     private fun parseM3U(content: String) {
         val lines = content.lines()
         var currentName = ""
@@ -796,7 +789,10 @@ class MainActivity : AppCompatActivity() {
         for (line in lines) {
             val trimmed = line.trim()
             if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
-                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                val logoFound = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                if (logoFound.isNotEmpty()) {
+                    currentLogo = logoFound
+                }
                 currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 if (groupFound.isNotEmpty()) {
@@ -1042,11 +1038,13 @@ class MainActivity : AppCompatActivity() {
 
                 tvFavStar?.visibility = if (favoriteUrls.contains(ch.streamUrl)) View.VISIBLE else View.GONE
 
+                // Loqoların HTTP/HTTPS olmasından asılı olmayaraq sürətli endirilməsi və göstərilməsi
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
                     Glide.with(this@MainActivity)
                         .load(ch.logoUrl)
-                        .override(80, 80)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .override(90, 90)
                         .into(imgLogo)
                 } else {
                     imgLogo.visibility = View.GONE
