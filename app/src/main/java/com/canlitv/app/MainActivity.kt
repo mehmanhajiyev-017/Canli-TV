@@ -58,20 +58,16 @@ data class Channel(
 
 class MainActivity : AppCompatActivity() {
 
-    // Мульти-плееры (до 4 слотов)
-    private val players = arrayOfNulls<ExoPlayer>(4)
-    private val playerViews = arrayOfNulls<PlayerView>(4)
-    private val slotContainers = arrayOfNulls<FrameLayout>(4)
-    private val slotCurrentChannelIndex = IntArray(4) { -1 }
+    // 2 слота для режима 2 экранов
+    private val players = arrayOfNulls<ExoPlayer>(2)
+    private val playerViews = arrayOfNulls<PlayerView>(2)
+    private val slotContainers = arrayOfNulls<FrameLayout>(2)
+    private val slotCurrentChannelIndex = IntArray(2) { -1 }
 
     private var activeSlotIndex = 0
-    private var currentScreenMode = 1 // 1, 2, 3 или 4 экрана
+    private var isDualScreenMode = false
 
-    private lateinit var rightSlotsContainer: View
-    private lateinit var rowTopRight: View
-    private lateinit var rowBottomRight: View
-    private lateinit var btnMultiScreenToggle: Button
-
+    private lateinit var btnScreenSplitToggle: Button
     private lateinit var channelPanel: View
     private lateinit var categoryPanel: View
     private lateinit var numPadPanel: View
@@ -103,7 +99,6 @@ class MainActivity : AppCompatActivity() {
     private val currentProgramsMap = ConcurrentHashMap<String, String>()
     private var detectedPlaylistEpgUrl: String = ""
 
-    private var previousPlayingIndexInAll = -1
     private var doubleBackToExitPressedOnce = false
 
     private val handler = Handler(Looper.getMainLooper())
@@ -118,22 +113,12 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
-        // Инициализация мульти-слотов
         playerViews[0] = findViewById(R.id.playerView1)
         playerViews[1] = findViewById(R.id.playerView2)
-        playerViews[2] = findViewById(R.id.playerView3)
-        playerViews[3] = findViewById(R.id.playerView4)
-
         slotContainers[0] = findViewById(R.id.slot1Container)
         slotContainers[1] = findViewById(R.id.slot2Container)
-        slotContainers[2] = findViewById(R.id.slot3Container)
-        slotContainers[3] = findViewById(R.id.slot4Container)
 
-        rightSlotsContainer = findViewById(R.id.rightSlotsContainer)
-        rowTopRight = findViewById(R.id.rowTopRight)
-        rowBottomRight = findViewById(R.id.rowBottomRight)
-        btnMultiScreenToggle = findViewById(R.id.btnMultiScreenToggle)
-
+        btnScreenSplitToggle = findViewById(R.id.btnScreenSplitToggle)
         channelPanel = findViewById(R.id.channelPanel)
         categoryPanel = findViewById(R.id.categoryPanel)
         numPadPanel = findViewById(R.id.numPadPanel)
@@ -171,7 +156,7 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
 
-        initMultiScreenStyles()
+        initSplitScreenButton()
 
         (categoryPanel as? LinearLayout)?.let { panel ->
             panel.removeView(btnOpenSettings)
@@ -238,7 +223,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         initPlayers()
-        updateMultiViewLayout(1)
+        updateDualScreenLayout(false)
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
@@ -265,87 +250,52 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initMultiScreenStyles() {
-        val btnDefaultBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#33FFFFFF"))
-            cornerRadius = 10f
-            setStroke(1, Color.parseColor("#55FFFFFF"))
+    private fun initSplitScreenButton() {
+        val defaultBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#4D151A22"))
+            cornerRadius = 12f
+            setStroke(2, Color.parseColor("#33FFFFFF"))
         }
-        val btnFocusedBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#2979FF"))
-            cornerRadius = 10f
-            setStroke(2, Color.parseColor("#FFFFFF"))
-        }
-
-        btnMultiScreenToggle.background = btnDefaultBg
-        btnMultiScreenToggle.setOnFocusChangeListener { _, hasFocus ->
-            btnMultiScreenToggle.background = if (hasFocus) btnFocusedBg else btnDefaultBg
+        val focusedBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#402979FF"))
+            cornerRadius = 12f
+            setStroke(2, Color.parseColor("#80FFFFFF"))
         }
 
-        btnMultiScreenToggle.setOnClickListener {
-            val nextMode = when (currentScreenMode) {
-                1 -> 2
-                2 -> 3
-                3 -> 4
-                else -> 1
-            }
-            updateMultiViewLayout(nextMode)
-            updateBannerMultiScreenText()
+        btnScreenSplitToggle.background = defaultBg
+        btnScreenSplitToggle.setOnFocusChangeListener { _, hasFocus ->
+            btnScreenSplitToggle.background = if (hasFocus) focusedBg else defaultBg
+            btnScreenSplitToggle.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#ECEFF1"))
+        }
+
+        btnScreenSplitToggle.setOnClickListener {
+            toggleDualScreen()
         }
     }
 
-    private fun updateBannerMultiScreenText() {
-        btnMultiScreenToggle.text = "⊞ Экран: $currentScreenMode"
+    private fun toggleDualScreen() {
+        updateDualScreenLayout(!isDualScreenMode)
     }
 
-    private fun updateMultiViewLayout(mode: Int) {
-        currentScreenMode = mode
-        updateBannerMultiScreenText()
+    private fun updateDualScreenLayout(enableDual: Boolean) {
+        isDualScreenMode = enableDual
+        btnScreenSplitToggle.text = if (isDualScreenMode) "Экран: 2" else "Экран: 1"
 
-        when (mode) {
-            1 -> {
-                rightSlotsContainer.visibility = View.GONE
-                rowBottomRight.visibility = View.GONE
-                slotContainers[3]?.visibility = View.GONE
-                activeSlotIndex = 0
+        if (isDualScreenMode) {
+            slotContainers[1]?.visibility = View.VISIBLE
+            // Если во 2-м слоте еще ничего не играет, запустим следующий канал
+            if (slotCurrentChannelIndex[1] == -1 && allChannels.isNotEmpty()) {
+                val nextCh = ((slotCurrentChannelIndex[0] + 1) % allChannels.size).coerceAtLeast(0)
+                playChannelInSlot(1, nextCh)
             }
-            2 -> {
-                rightSlotsContainer.visibility = View.VISIBLE
-                rowTopRight.visibility = View.VISIBLE
-                rowBottomRight.visibility = View.GONE
-                slotContainers[3]?.visibility = View.GONE
-            }
-            3 -> {
-                rightSlotsContainer.visibility = View.VISIBLE
-                rowTopRight.visibility = View.VISIBLE
-                rowBottomRight.visibility = View.VISIBLE
-                slotContainers[3]?.visibility = View.GONE
-            }
-            4 -> {
-                rightSlotsContainer.visibility = View.VISIBLE
-                rowTopRight.visibility = View.VISIBLE
-                rowBottomRight.visibility = View.VISIBLE
-                slotContainers[3]?.visibility = View.VISIBLE
-            }
-        }
-
-        // Запуск каналов в новых открывшихся окнах
-        for (i in 0 until mode) {
-            if (slotCurrentChannelIndex[i] == -1 && allChannels.isNotEmpty()) {
-                val targetCh = (slotCurrentChannelIndex[0] + i).coerceAtLeast(0) % allChannels.size
-                playChannelInSlot(i, targetCh)
-            }
-        }
-
-        // Остановка плееров в скрытых слотах
-        for (i in mode until 4) {
-            players[i]?.stop()
-            slotCurrentChannelIndex[i] = -1
-        }
-
-        if (activeSlotIndex >= mode) {
+        } else {
+            slotContainers[1]?.visibility = View.GONE
+            players[1]?.stop()
+            players[1]?.clearMediaItems()
+            slotCurrentChannelIndex[1] = -1
             activeSlotIndex = 0
         }
+
         refreshSlotHighlightsAndAudio()
     }
 
@@ -359,14 +309,12 @@ class MainActivity : AppCompatActivity() {
             setStroke(4, Color.parseColor("#2979FF"))
         }
 
-        for (i in 0 until 4) {
-            if (i < currentScreenMode && currentScreenMode > 1) {
+        for (i in 0 until 2) {
+            if (isDualScreenMode) {
                 slotContainers[i]?.background = if (i == activeSlotIndex) activeBg else normalBg
             } else {
                 slotContainers[i]?.background = null
             }
-
-            // Звук включен ТОЛЬКО в активном слоте
             players[i]?.volume = if (i == activeSlotIndex) 1f else 0f
         }
     }
@@ -380,7 +328,7 @@ class MainActivity : AppCompatActivity() {
 
         val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
 
-        for (i in 0 until 4) {
+        for (i in 0 until 2) {
             if (players[i] == null) {
                 val p = ExoPlayer.Builder(this)
                     .setMediaSourceFactory(mediaSourceFactory)
@@ -394,7 +342,7 @@ class MainActivity : AppCompatActivity() {
                     override fun onPlayerError(error: PlaybackException) {
                         runOnUiThread {
                             if (slotId == activeSlotIndex) {
-                                Toast.makeText(applicationContext, "Ошибка окна ${slotId + 1}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
                             }
                         }
                     }
@@ -404,7 +352,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playChannelInSlot(slot: Int, channelIndex: Int) {
-        if (slot !in 0..3 || channelIndex !in allChannels.indices) return
+        if (slot !in 0..1 || channelIndex !in allChannels.indices) return
 
         slotCurrentChannelIndex[slot] = channelIndex
         val channel = allChannels[channelIndex]
@@ -498,7 +446,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        for (i in 0 until 4) {
+        for (i in 0 until 2) {
             players[i]?.stop()
             players[i]?.release()
             players[i] = null
@@ -1273,7 +1221,7 @@ class MainActivity : AppCompatActivity() {
 
         val prog = getProgramForChannel(channel)
         val progText = if (prog.isNotEmpty()) "  |  🔹 $prog" else ""
-        val slotText = if (currentScreenMode > 1) " [Окно ${activeSlotIndex + 1}]" else ""
+        val slotText = if (isDualScreenMode) " [Окно ${activeSlotIndex + 1}]" else ""
 
         tvBannerCategory.text = "● ${channel.category.uppercase()}$slotText$isFav$progText"
 
@@ -1281,12 +1229,12 @@ class MainActivity : AppCompatActivity() {
         bannerRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { infoBanner.visibility = View.GONE }
         bannerRunnable = r
-        handler.postDelayed(r, 5000)
+        handler.postDelayed(r, 4000)
     }
 
-    private fun switchActiveSlot(direction: Int) {
-        if (currentScreenMode <= 1) return
-        activeSlotIndex = (activeSlotIndex + direction + currentScreenMode) % currentScreenMode
+    private fun toggleActiveSlot() {
+        if (!isDualScreenMode) return
+        activeSlotIndex = if (activeSlotIndex == 0) 1 else 0
         refreshSlotHighlightsAndAudio()
         val curCh = slotCurrentChannelIndex[activeSlotIndex]
         if (curCh in allChannels.indices) {
@@ -1361,20 +1309,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Если баннер открыт и фокус попал на кнопку мульти-экрана
-        if (infoBanner.visibility == View.VISIBLE && btnMultiScreenToggle.hasFocus()) {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                infoBanner.visibility = View.GONE
-                return true
-            }
-            return super.onKeyDown(keyCode, event)
-        }
-
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                if (currentScreenMode > 1) {
-                    // Возврат в режим одного экрана
-                    updateMultiViewLayout(1)
+                if (isDualScreenMode) {
+                    updateDualScreenLayout(false)
                     return true
                 }
 
@@ -1400,24 +1338,20 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                if (infoBanner.visibility == View.VISIBLE) {
-                    btnMultiScreenToggle.requestFocus()
-                    return true
-                }
                 stepChannelInCurrentCategory(-1)
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (currentScreenMode > 1) {
-                    switchActiveSlot(-1)
+                if (isDualScreenMode) {
+                    toggleActiveSlot()
                     return true
                 }
                 openChannelPanelCenteredOnCurrent()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (currentScreenMode > 1) {
-                    switchActiveSlot(1)
+                if (isDualScreenMode) {
+                    toggleActiveSlot()
                     return true
                 }
                 numPadPanel.visibility = View.VISIBLE
