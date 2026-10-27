@@ -76,7 +76,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBannerCategory: TextView
 
     private lateinit var syncStatusCard: View
-    private lateinit var tvSyncUrl: TextView
     private lateinit var tvSyncChannels: TextView
     private lateinit var tvSyncLogos: TextView
     private lateinit var tvSyncPrograms: TextView
@@ -99,6 +98,7 @@ class MainActivity : AppCompatActivity() {
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
     private var hideSyncCardRunnable: Runnable? = null
+    private var maxSyncTimeoutRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,15 +124,15 @@ class MainActivity : AppCompatActivity() {
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
         syncStatusCard = findViewById(R.id.syncStatusCard)
-        tvSyncUrl = findViewById(R.id.tvSyncUrl)
         tvSyncChannels = findViewById(R.id.tvSyncChannels)
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
 
+        // Şəffaf zərif tünd fon
         syncStatusCard.background = GradientDrawable().apply {
-            setColor(Color.parseColor("#991C222E"))
-            cornerRadius = 18f
-            setStroke(2, Color.parseColor("#44FFFFFF"))
+            setColor(Color.parseColor("#9910141E"))
+            cornerRadius = 14f
+            setStroke(1, Color.parseColor("#33FFFFFF"))
         }
 
         categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
@@ -432,30 +432,35 @@ class MainActivity : AppCompatActivity() {
         btnSaveUrl.requestFocus()
     }
 
-    private fun showSyncCard(url: String) {
-        tvSyncUrl.text = "($url)"
+    private fun showSyncCard() {
         tvSyncChannels.text = "Channels: Yüklənir..."
         tvSyncLogos.text = "Logotypes: -"
         tvSyncPrograms.text = "Programs: -"
         syncStatusCard.visibility = View.VISIBLE
         hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
+
+        // Qoruyucu taymer: Şəbəkə ilişib qalsa belə, kart maksimum 12 saniyə sonra mütləq silinir
+        maxSyncTimeoutRunnable?.let { handler.removeCallbacks(it) }
+        val rTimeout = Runnable { syncStatusCard.visibility = View.GONE }
+        maxSyncTimeoutRunnable = rTimeout
+        handler.postDelayed(rTimeout, 12000)
     }
 
-    private fun scheduleHideSyncCard() {
+    private fun scheduleHideSyncCard(delayMs: Long = 3000) {
         hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { syncStatusCard.visibility = View.GONE }
         hideSyncCardRunnable = r
-        handler.postDelayed(r, 4000)
+        handler.postDelayed(r, delayMs)
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
-        runOnUiThread { showSyncCard(url) }
+        runOnUiThread { showSyncCard() }
 
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -473,7 +478,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
-                    scheduleHideSyncCard()
+                    scheduleHideSyncCard(1000)
                 }
             }
 
@@ -484,7 +489,7 @@ class MainActivity : AppCompatActivity() {
                             Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
-                        scheduleHideSyncCard()
+                        scheduleHideSyncCard(1000)
                     }
                     return
                 }
@@ -519,7 +524,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     runOnUiThread {
                         tvSyncPrograms.text = "Programs: -"
-                        scheduleHideSyncCard()
+                        scheduleHideSyncCard(2500)
                     }
                 }
 
@@ -563,7 +568,6 @@ class MainActivity : AppCompatActivity() {
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        // İstənilən dırnaqlı və ya dırnaqsız formatı tutan təkmil regex
         val groupRegex = Regex("""group-title\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
         val logoRegex = Regex("""(?:tvg-logo|logo)\s*=\s*["']?([^"',\s\r\n]+)["']?""", RegexOption.IGNORE_CASE)
         val idRegex = Regex("""tvg-id\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
@@ -575,7 +579,6 @@ class MainActivity : AppCompatActivity() {
                 val epgMatch = epgHeaderRegex.find(trimmed)
                 val rawEpg = epgMatch?.groups?.get(1)?.value?.trim() ?: ""
                 if (rawEpg.isNotEmpty()) {
-                    // Əgər vergüllə bir neçə EPG linki varsa, ilk http ilə başlayanını götür
                     val candidate = rawEpg.split(",").firstOrNull { it.trim().startsWith("http") }?.trim() ?: ""
                     if (candidate.isNotEmpty()) detectedPlaylistEpgUrl = candidate
                 }
@@ -589,6 +592,9 @@ class MainActivity : AppCompatActivity() {
                     tempCategories.add(currentGroup)
                 }
                 currentName = trimmed.substringAfterLast(",").trim()
+            } else if (trimmed.startsWith("#EXTIMG:", ignoreCase = true)) {
+                val img = trimmed.substringAfter(":").trim()
+                if (img.isNotEmpty()) currentLogo = img
             } else if (trimmed.startsWith("#EXTGRP:", ignoreCase = true)) {
                 val grp = trimmed.substringAfter(":").trim()
                 if (grp.isNotEmpty()) {
@@ -633,8 +639,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(45, TimeUnit.SECONDS)
-            .readTimeout(45, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -648,33 +654,36 @@ class MainActivity : AppCompatActivity() {
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 runOnUiThread {
-                    tvSyncPrograms.text = "Programs: Tapılmadı"
-                    scheduleHideSyncCard()
+                    tvSyncPrograms.text = "Programs: -"
+                    scheduleHideSyncCard(2000)
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
                 if (!response.isSuccessful) {
                     runOnUiThread {
-                        tvSyncPrograms.text = "Programs: Server xətası"
-                        scheduleHideSyncCard()
+                        tvSyncPrograms.text = "Programs: -"
+                        scheduleHideSyncCard(2000)
                     }
                     return
                 }
-                val bodyStream = response.body?.byteStream() ?: return
+                val bodyStream = response.body?.byteStream()
+                if (bodyStream == null) {
+                    runOnUiThread { scheduleHideSyncCard(1000) }
+                    return
+                }
                 try {
                     val isGzip = epgUrl.endsWith(".gz", ignoreCase = true) ||
                             response.header("Content-Encoding")?.contains("gzip", ignoreCase = true) == true
                     val inputStream: InputStream = if (isGzip) GZIPInputStream(bodyStream) else bodyStream
                     parseXmlTvStream(inputStream)
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    runOnUiThread { tvSyncPrograms.text = "Programs: Format xətası" }
+                    runOnUiThread { tvSyncPrograms.text = "Programs: -" }
                 } finally {
                     try {
                         bodyStream.close()
                     } catch (_: Exception) {}
-                    runOnUiThread { scheduleHideSyncCard() }
+                    runOnUiThread { scheduleHideSyncCard(3000) }
                 }
             }
         })
