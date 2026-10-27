@@ -14,7 +14,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -58,16 +57,9 @@ data class Channel(
 
 class MainActivity : AppCompatActivity() {
 
-    // 2 слота для режима 2 экранов
-    private val players = arrayOfNulls<ExoPlayer>(2)
-    private val playerViews = arrayOfNulls<PlayerView>(2)
-    private val slotContainers = arrayOfNulls<FrameLayout>(2)
-    private val slotCurrentChannelIndex = IntArray(2) { -1 }
+    private var player: ExoPlayer? = null
+    private lateinit var playerView: PlayerView
 
-    private var activeSlotIndex = 0
-    private var isDualScreenMode = false
-
-    private lateinit var btnScreenSplitToggle: Button
     private lateinit var channelPanel: View
     private lateinit var categoryPanel: View
     private lateinit var numPadPanel: View
@@ -99,6 +91,8 @@ class MainActivity : AppCompatActivity() {
     private val currentProgramsMap = ConcurrentHashMap<String, String>()
     private var detectedPlaylistEpgUrl: String = ""
 
+    private var currentPlayingIndex = -1
+    private var previousPlayingIndex = -1
     private var doubleBackToExitPressedOnce = false
 
     private val handler = Handler(Looper.getMainLooper())
@@ -113,12 +107,7 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
-        playerViews[0] = findViewById(R.id.playerView1)
-        playerViews[1] = findViewById(R.id.playerView2)
-        slotContainers[0] = findViewById(R.id.slot1Container)
-        slotContainers[1] = findViewById(R.id.slot2Container)
-
-        btnScreenSplitToggle = findViewById(R.id.btnScreenSplitToggle)
+        playerView = findViewById(R.id.playerView)
         channelPanel = findViewById(R.id.channelPanel)
         categoryPanel = findViewById(R.id.categoryPanel)
         numPadPanel = findViewById(R.id.numPadPanel)
@@ -155,8 +144,6 @@ class MainActivity : AppCompatActivity() {
             cornerRadius = 20f
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
-
-        initSplitScreenButton()
 
         (categoryPanel as? LinearLayout)?.let { panel ->
             panel.removeView(btnOpenSettings)
@@ -222,8 +209,7 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
-        initPlayers()
-        updateDualScreenLayout(false)
+        initPlayer()
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
@@ -238,7 +224,7 @@ class MainActivity : AppCompatActivity() {
                     .putString("EPG_URL", epgUrl)
                     .apply()
                 linkDialogPanel.visibility = View.GONE
-                slotCurrentChannelIndex.fill(-1)
+                currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
                 Toast.makeText(applicationContext, "Введите корректный M3U URL", Toast.LENGTH_SHORT).show()
@@ -250,131 +236,57 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initSplitScreenButton() {
-        val defaultBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#4D151A22"))
-            cornerRadius = 12f
-            setStroke(2, Color.parseColor("#33FFFFFF"))
-        }
-        val focusedBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#402979FF"))
-            cornerRadius = 12f
-            setStroke(2, Color.parseColor("#80FFFFFF"))
-        }
+    private fun initPlayer() {
+        if (player == null) {
+            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setUserAgent("Mozilla/5.0")
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
 
-        btnScreenSplitToggle.background = defaultBg
-        btnScreenSplitToggle.setOnFocusChangeListener { _, hasFocus ->
-            btnScreenSplitToggle.background = if (hasFocus) focusedBg else defaultBg
-            btnScreenSplitToggle.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#ECEFF1"))
-        }
+            val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
 
-        btnScreenSplitToggle.setOnClickListener {
-            toggleDualScreen()
-        }
-    }
+            player = ExoPlayer.Builder(this)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build()
 
-    private fun toggleDualScreen() {
-        updateDualScreenLayout(!isDualScreenMode)
-    }
+            playerView.player = player
+            playerView.useController = false
 
-    private fun updateDualScreenLayout(enableDual: Boolean) {
-        isDualScreenMode = enableDual
-        btnScreenSplitToggle.text = if (isDualScreenMode) "Экран: 2" else "Экран: 1"
-
-        if (isDualScreenMode) {
-            slotContainers[1]?.visibility = View.VISIBLE
-            // Если во 2-м слоте еще ничего не играет, запустим следующий канал
-            if (slotCurrentChannelIndex[1] == -1 && allChannels.isNotEmpty()) {
-                val nextCh = ((slotCurrentChannelIndex[0] + 1) % allChannels.size).coerceAtLeast(0)
-                playChannelInSlot(1, nextCh)
-            }
-        } else {
-            slotContainers[1]?.visibility = View.GONE
-            players[1]?.stop()
-            players[1]?.clearMediaItems()
-            slotCurrentChannelIndex[1] = -1
-            activeSlotIndex = 0
-        }
-
-        refreshSlotHighlightsAndAudio()
-    }
-
-    private fun refreshSlotHighlightsAndAudio() {
-        val normalBg = GradientDrawable().apply {
-            setColor(Color.BLACK)
-            setStroke(2, Color.parseColor("#22FFFFFF"))
-        }
-        val activeBg = GradientDrawable().apply {
-            setColor(Color.BLACK)
-            setStroke(4, Color.parseColor("#2979FF"))
-        }
-
-        for (i in 0 until 2) {
-            if (isDualScreenMode) {
-                slotContainers[i]?.background = if (i == activeSlotIndex) activeBg else normalBg
-            } else {
-                slotContainers[i]?.background = null
-            }
-            players[i]?.volume = if (i == activeSlotIndex) 1f else 0f
-        }
-    }
-
-    private fun initPlayers() {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
-
-        for (i in 0 until 2) {
-            if (players[i] == null) {
-                val p = ExoPlayer.Builder(this)
-                    .setMediaSourceFactory(mediaSourceFactory)
-                    .build()
-                players[i] = p
-                playerViews[i]?.player = p
-                playerViews[i]?.useController = false
-
-                val slotId = i
-                p.addListener(object : Player.Listener {
-                    override fun onPlayerError(error: PlaybackException) {
-                        runOnUiThread {
-                            if (slotId == activeSlotIndex) {
-                                Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+            player?.addListener(object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    runOnUiThread {
+                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
                     }
-                })
-            }
+                }
+            })
         }
     }
 
-    private fun playChannelInSlot(slot: Int, channelIndex: Int) {
-        if (slot !in 0..1 || channelIndex !in allChannels.indices) return
+    private fun playChannelByIndex(channelIndex: Int) {
+        if (channelIndex !in allChannels.indices) return
 
-        slotCurrentChannelIndex[slot] = channelIndex
+        if (currentPlayingIndex != -1 && currentPlayingIndex != channelIndex) {
+            previousPlayingIndex = currentPlayingIndex
+        }
+
+        currentPlayingIndex = channelIndex
         val channel = allChannels[channelIndex]
 
-        if (slot == 0) {
-            getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                .edit()
-                .putString("LAST_CHANNEL_URL", channel.streamUrl)
-                .apply()
-        }
+        getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            .edit()
+            .putString("LAST_CHANNEL_URL", channel.streamUrl)
+            .apply()
 
-        val p = players[slot] ?: return
+        initPlayer()
         val streamUri = Uri.parse(channel.streamUrl)
         val mediaItem = MediaItem.fromUri(streamUri)
 
-        p.setMediaItem(mediaItem)
-        p.prepare()
-        p.playWhenReady = true
+        player?.setMediaItem(mediaItem)
+        player?.prepare()
+        player?.playWhenReady = true
 
-        if (slot == activeSlotIndex) {
-            showInfoBanner(channel)
-        }
+        showInfoBanner(channel)
     }
 
     private fun initSettingsPanelFocus() {
@@ -428,12 +340,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        initPlayers()
+        initPlayer()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
         if (savedUrl.isNotEmpty()) {
-            fetchM3U(savedUrl, autoPlay = (players[0]?.isPlaying != true))
+            fetchM3U(savedUrl, autoPlay = (player?.isPlaying != true))
         } else {
             showSettingsDialog()
         }
@@ -441,21 +353,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        for (p in players) p?.playWhenReady = false
+        player?.playWhenReady = false
     }
 
     override fun onStop() {
         super.onStop()
-        for (i in 0 until 2) {
-            players[i]?.stop()
-            players[i]?.release()
-            players[i] = null
-        }
+        player?.stop()
+        player?.release()
+        player = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        for (p in players) p?.release()
+        player?.release()
+        player = null
         handler.removeCallbacksAndMessages(null)
     }
 
@@ -608,8 +519,8 @@ class MainActivity : AppCompatActivity() {
                 val body = response.body?.string() ?: return
 
                 val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                val lastPlayedUrl = if (slotCurrentChannelIndex[0] in allChannels.indices) {
-                    allChannels[slotCurrentChannelIndex[0]].streamUrl
+                val lastPlayedUrl = if (currentPlayingIndex in allChannels.indices) {
+                    allChannels[currentPlayingIndex].streamUrl
                 } else {
                     prefs.getString("LAST_CHANNEL_URL", "") ?: ""
                 }
@@ -647,10 +558,10 @@ class MainActivity : AppCompatActivity() {
                             0
                         }
 
-                        if (autoPlay || players[0]?.isPlaying != true) {
-                            playChannelInSlot(0, resumeIndex)
+                        if (autoPlay || player?.isPlaying != true) {
+                            playChannelByIndex(resumeIndex)
                         } else {
-                            slotCurrentChannelIndex[0] = resumeIndex
+                            currentPlayingIndex = resumeIndex
                         }
                     } else {
                         Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_LONG).show()
@@ -881,9 +792,8 @@ class MainActivity : AppCompatActivity() {
                         runOnUiThread {
                             tvSyncPrograms.text = "Programs: $parsedCount"
                             recyclerViewChannels.adapter?.notifyDataSetChanged()
-                            val curChIdx = slotCurrentChannelIndex[activeSlotIndex]
-                            if (infoBanner.visibility == View.VISIBLE && curChIdx in allChannels.indices) {
-                                showInfoBanner(allChannels[curChIdx])
+                            if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
+                                showInfoBanner(allChannels[currentPlayingIndex])
                             }
                         }
                     } catch (e: Exception) {
@@ -943,13 +853,12 @@ class MainActivity : AppCompatActivity() {
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
         categoryPanel.visibility = View.GONE
-        val curChIdx = slotCurrentChannelIndex[activeSlotIndex]
-        if (allChannels.isEmpty() || curChIdx !in allChannels.indices) {
+        if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
             filterChannels(selectedCategory)
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
             return
         }
-        val currentChannel = allChannels[curChIdx]
+        val currentChannel = allChannels[currentPlayingIndex]
         val inCurrentCat = when (selectedCategory) {
             "Все" -> true
             "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
@@ -961,12 +870,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun focusCurrentChannelCentered() {
-        val curChIdx = slotCurrentChannelIndex[activeSlotIndex]
-        if (allChannels.isEmpty() || curChIdx !in allChannels.indices) {
+        if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
             return
         }
-        val currentChannel = allChannels[curChIdx]
+        val currentChannel = allChannels[currentPlayingIndex]
         val targetPos = displayedChannels.indexOfFirst { it.number == currentChannel.number }.coerceAtLeast(0)
 
         recyclerViewChannels.post {
@@ -1149,7 +1057,7 @@ class MainActivity : AppCompatActivity() {
                 row.setOnClickListener {
                     val allIndex = allChannels.indexOf(ch)
                     if (allIndex != -1) {
-                        playChannelInSlot(activeSlotIndex, allIndex)
+                        playChannelByIndex(allIndex)
                     }
                     channelPanel.visibility = View.GONE
                 }
@@ -1197,8 +1105,7 @@ class MainActivity : AppCompatActivity() {
         val list = if (displayedChannels.isNotEmpty()) displayedChannels else allChannels
         if (list.isEmpty()) return
 
-        val curIdx = slotCurrentChannelIndex[activeSlotIndex]
-        val currentPlayingChannel = if (curIdx in allChannels.indices) allChannels[curIdx] else null
+        val currentPlayingChannel = if (currentPlayingIndex in allChannels.indices) allChannels[currentPlayingIndex] else null
 
         val currentPosInDisplayed = list.indexOfFirst { it.streamUrl == currentPlayingChannel?.streamUrl }
         val nextPos = if (currentPosInDisplayed != -1) {
@@ -1210,7 +1117,7 @@ class MainActivity : AppCompatActivity() {
         val targetChannel = list[nextPos]
         val targetIndexInAll = allChannels.indexOf(targetChannel)
         if (targetIndexInAll != -1) {
-            playChannelInSlot(activeSlotIndex, targetIndexInAll)
+            playChannelByIndex(targetIndexInAll)
         }
     }
 
@@ -1221,9 +1128,8 @@ class MainActivity : AppCompatActivity() {
 
         val prog = getProgramForChannel(channel)
         val progText = if (prog.isNotEmpty()) "  |  🔹 $prog" else ""
-        val slotText = if (isDualScreenMode) " [Окно ${activeSlotIndex + 1}]" else ""
 
-        tvBannerCategory.text = "● ${channel.category.uppercase()}$slotText$isFav$progText"
+        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav$progText"
 
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
@@ -1232,21 +1138,10 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed(r, 4000)
     }
 
-    private fun toggleActiveSlot() {
-        if (!isDualScreenMode) return
-        activeSlotIndex = if (activeSlotIndex == 0) 1 else 0
-        refreshSlotHighlightsAndAudio()
-        val curCh = slotCurrentChannelIndex[activeSlotIndex]
-        if (curCh in allChannels.indices) {
-            showInfoBanner(allChannels[curCh])
-        }
-    }
-
     private fun exitApplicationCompletely() {
-        for (p in players) {
-            p?.stop()
-            p?.release()
-        }
+        player?.stop()
+        player?.release()
+        player = null
         finishAffinity()
     }
 
@@ -1311,8 +1206,8 @@ class MainActivity : AppCompatActivity() {
 
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                if (isDualScreenMode) {
-                    updateDualScreenLayout(false)
+                if (previousPlayingIndex in allChannels.indices && previousPlayingIndex != currentPlayingIndex) {
+                    playChannelByIndex(previousPlayingIndex)
                     return true
                 }
 
@@ -1327,9 +1222,8 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                val curIdx = slotCurrentChannelIndex[activeSlotIndex]
-                if (allChannels.isNotEmpty() && curIdx in allChannels.indices) {
-                    showInfoBanner(allChannels[curIdx])
+                if (allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
+                    showInfoBanner(allChannels[currentPlayingIndex])
                     return true
                 }
             }
@@ -1342,18 +1236,10 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                if (isDualScreenMode) {
-                    toggleActiveSlot()
-                    return true
-                }
                 openChannelPanelCenteredOnCurrent()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (isDualScreenMode) {
-                    toggleActiveSlot()
-                    return true
-                }
                 numPadPanel.visibility = View.VISIBLE
                 digitInputBuffer.clear()
                 tvNumpadDisplay.text = "---"
@@ -1385,7 +1271,7 @@ class MainActivity : AppCompatActivity() {
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
             if (foundIndex != -1) {
-                playChannelInSlot(activeSlotIndex, foundIndex)
+                playChannelByIndex(foundIndex)
                 numPadPanel.visibility = View.GONE
             } else {
                 Toast.makeText(applicationContext, "Канал не найден", Toast.LENGTH_SHORT).show()
