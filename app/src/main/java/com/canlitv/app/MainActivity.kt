@@ -7,12 +7,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Xml
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -34,27 +36,49 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import org.xmlpull.v1.XmlPullParser
+import java.io.BufferedInputStream
 import java.io.IOException
+import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
 
 data class Channel(
     val number: Int,
     val name: String,
     val logoUrl: String,
     val streamUrl: String,
-    val category: String
+    val category: String,
+    val tvgId: String = ""
 )
 
 class MainActivity : AppCompatActivity() {
 
-    private var player: ExoPlayer? = null
-    private lateinit var playerView: PlayerView
+    // Мульти-плееры (до 4 слотов)
+    private val players = arrayOfNulls<ExoPlayer>(4)
+    private val playerViews = arrayOfNulls<PlayerView>(4)
+    private val slotContainers = arrayOfNulls<FrameLayout>(4)
+    private val slotCurrentChannelIndex = IntArray(4) { -1 }
+
+    private var activeSlotIndex = 0
+    private var currentScreenMode = 1 // 1, 2, 3 или 4 экрана
+
+    private lateinit var rightSlotsContainer: View
+    private lateinit var rowTopRight: View
+    private lateinit var rowBottomRight: View
+    private lateinit var btnMultiScreenToggle: Button
+
     private lateinit var channelPanel: View
     private lateinit var categoryPanel: View
     private lateinit var numPadPanel: View
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
     private lateinit var etM3uUrl: EditText
+    private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveUrl: Button
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
@@ -65,13 +89,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
 
+    private lateinit var syncStatusCard: View
+    private lateinit var tvSyncChannels: TextView
+    private lateinit var tvSyncLogos: TextView
+    private lateinit var tvSyncPrograms: TextView
+
     private val allChannels = mutableListOf<Channel>()
     private val displayedChannels = mutableListOf<Channel>()
     private val categories = mutableListOf<String>()
     private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
 
-    private var currentPlayingIndexInAll = -1
+    private val currentProgramsMap = ConcurrentHashMap<String, String>()
+    private var detectedPlaylistEpgUrl: String = ""
+
     private var previousPlayingIndexInAll = -1
     private var doubleBackToExitPressedOnce = false
 
@@ -79,20 +110,37 @@ class MainActivity : AppCompatActivity() {
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
+    private var hideSyncCardRunnable: Runnable? = null
+    private var maxSyncTimeoutRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Запрещаем телевизору уходить в спящий режим
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
-        playerView = findViewById(R.id.playerView)
+        // Инициализация мульти-слотов
+        playerViews[0] = findViewById(R.id.playerView1)
+        playerViews[1] = findViewById(R.id.playerView2)
+        playerViews[2] = findViewById(R.id.playerView3)
+        playerViews[3] = findViewById(R.id.playerView4)
+
+        slotContainers[0] = findViewById(R.id.slot1Container)
+        slotContainers[1] = findViewById(R.id.slot2Container)
+        slotContainers[2] = findViewById(R.id.slot3Container)
+        slotContainers[3] = findViewById(R.id.slot4Container)
+
+        rightSlotsContainer = findViewById(R.id.rightSlotsContainer)
+        rowTopRight = findViewById(R.id.rowTopRight)
+        rowBottomRight = findViewById(R.id.rowBottomRight)
+        btnMultiScreenToggle = findViewById(R.id.btnMultiScreenToggle)
+
         channelPanel = findViewById(R.id.channelPanel)
         categoryPanel = findViewById(R.id.categoryPanel)
         numPadPanel = findViewById(R.id.numPadPanel)
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
         etM3uUrl = findViewById(R.id.etM3uUrl)
+        etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveUrl = findViewById(R.id.btnSaveUrl)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
@@ -103,6 +151,17 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
+        syncStatusCard = findViewById(R.id.syncStatusCard)
+        tvSyncChannels = findViewById(R.id.tvSyncChannels)
+        tvSyncLogos = findViewById(R.id.tvSyncLogos)
+        tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
+
+        syncStatusCard.background = GradientDrawable().apply {
+            setColor(Color.parseColor("#B3101522"))
+            cornerRadius = 16f
+            setStroke(2, Color.parseColor("#44FFFFFF"))
+        }
+
         categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         channelPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         infoBanner.setBackgroundColor(Color.parseColor("#880B0E14"))
@@ -111,6 +170,8 @@ class MainActivity : AppCompatActivity() {
             cornerRadius = 20f
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
+
+        initMultiScreenStyles()
 
         (categoryPanel as? LinearLayout)?.let { panel ->
             panel.removeView(btnOpenSettings)
@@ -176,18 +237,23 @@ class MainActivity : AppCompatActivity() {
             false
         }
 
-        initPlayer()
+        initPlayers()
+        updateMultiViewLayout(1)
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
 
         btnSaveUrl.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
+            val epgUrl = etEpgUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
                 val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                prefs.edit().putString("M3U_URL", url).apply()
+                prefs.edit()
+                    .putString("M3U_URL", url)
+                    .putString("EPG_URL", epgUrl)
+                    .apply()
                 linkDialogPanel.visibility = View.GONE
-                currentPlayingIndexInAll = -1
+                slotCurrentChannelIndex.fill(-1)
                 fetchM3U(url, autoPlay = true)
             } else {
                 Toast.makeText(applicationContext, "Введите корректный M3U URL", Toast.LENGTH_SHORT).show()
@@ -199,23 +265,190 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun initMultiScreenStyles() {
+        val btnDefaultBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#33FFFFFF"))
+            cornerRadius = 10f
+            setStroke(1, Color.parseColor("#55FFFFFF"))
+        }
+        val btnFocusedBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#2979FF"))
+            cornerRadius = 10f
+            setStroke(2, Color.parseColor("#FFFFFF"))
+        }
+
+        btnMultiScreenToggle.background = btnDefaultBg
+        btnMultiScreenToggle.setOnFocusChangeListener { _, hasFocus ->
+            btnMultiScreenToggle.background = if (hasFocus) btnFocusedBg else btnDefaultBg
+        }
+
+        btnMultiScreenToggle.setOnClickListener {
+            val nextMode = when (currentScreenMode) {
+                1 -> 2
+                2 -> 3
+                3 -> 4
+                else -> 1
+            }
+            updateMultiViewLayout(nextMode)
+            updateBannerMultiScreenText()
+        }
+    }
+
+    private fun updateBannerMultiScreenText() {
+        btnMultiScreenToggle.text = "⊞ Экран: $currentScreenMode"
+    }
+
+    private fun updateMultiViewLayout(mode: Int) {
+        currentScreenMode = mode
+        updateBannerMultiScreenText()
+
+        when (mode) {
+            1 -> {
+                rightSlotsContainer.visibility = View.GONE
+                rowBottomRight.visibility = View.GONE
+                slotContainers[3]?.visibility = View.GONE
+                activeSlotIndex = 0
+            }
+            2 -> {
+                rightSlotsContainer.visibility = View.VISIBLE
+                rowTopRight.visibility = View.VISIBLE
+                rowBottomRight.visibility = View.GONE
+                slotContainers[3]?.visibility = View.GONE
+            }
+            3 -> {
+                rightSlotsContainer.visibility = View.VISIBLE
+                rowTopRight.visibility = View.VISIBLE
+                rowBottomRight.visibility = View.VISIBLE
+                slotContainers[3]?.visibility = View.GONE
+            }
+            4 -> {
+                rightSlotsContainer.visibility = View.VISIBLE
+                rowTopRight.visibility = View.VISIBLE
+                rowBottomRight.visibility = View.VISIBLE
+                slotContainers[3]?.visibility = View.VISIBLE
+            }
+        }
+
+        // Запуск каналов в новых открывшихся окнах
+        for (i in 0 until mode) {
+            if (slotCurrentChannelIndex[i] == -1 && allChannels.isNotEmpty()) {
+                val targetCh = (slotCurrentChannelIndex[0] + i).coerceAtLeast(0) % allChannels.size
+                playChannelInSlot(i, targetCh)
+            }
+        }
+
+        // Остановка плееров в скрытых слотах
+        for (i in mode until 4) {
+            players[i]?.stop()
+            slotCurrentChannelIndex[i] = -1
+        }
+
+        if (activeSlotIndex >= mode) {
+            activeSlotIndex = 0
+        }
+        refreshSlotHighlightsAndAudio()
+    }
+
+    private fun refreshSlotHighlightsAndAudio() {
+        val normalBg = GradientDrawable().apply {
+            setColor(Color.BLACK)
+            setStroke(2, Color.parseColor("#22FFFFFF"))
+        }
+        val activeBg = GradientDrawable().apply {
+            setColor(Color.BLACK)
+            setStroke(4, Color.parseColor("#2979FF"))
+        }
+
+        for (i in 0 until 4) {
+            if (i < currentScreenMode && currentScreenMode > 1) {
+                slotContainers[i]?.background = if (i == activeSlotIndex) activeBg else normalBg
+            } else {
+                slotContainers[i]?.background = null
+            }
+
+            // Звук включен ТОЛЬКО в активном слоте
+            players[i]?.volume = if (i == activeSlotIndex) 1f else 0f
+        }
+    }
+
+    private fun initPlayers() {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(15000)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
+
+        for (i in 0 until 4) {
+            if (players[i] == null) {
+                val p = ExoPlayer.Builder(this)
+                    .setMediaSourceFactory(mediaSourceFactory)
+                    .build()
+                players[i] = p
+                playerViews[i]?.player = p
+                playerViews[i]?.useController = false
+
+                val slotId = i
+                p.addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        runOnUiThread {
+                            if (slotId == activeSlotIndex) {
+                                Toast.makeText(applicationContext, "Ошибка окна ${slotId + 1}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    }
+
+    private fun playChannelInSlot(slot: Int, channelIndex: Int) {
+        if (slot !in 0..3 || channelIndex !in allChannels.indices) return
+
+        slotCurrentChannelIndex[slot] = channelIndex
+        val channel = allChannels[channelIndex]
+
+        if (slot == 0) {
+            getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                .edit()
+                .putString("LAST_CHANNEL_URL", channel.streamUrl)
+                .apply()
+        }
+
+        val p = players[slot] ?: return
+        val streamUri = Uri.parse(channel.streamUrl)
+        val mediaItem = MediaItem.fromUri(streamUri)
+
+        p.setMediaItem(mediaItem)
+        p.prepare()
+        p.playWhenReady = true
+
+        if (slot == activeSlotIndex) {
+            showInfoBanner(channel)
+        }
+    }
+
     private fun initSettingsPanelFocus() {
-        etM3uUrl.backgroundTintList = null
-        val defaultEditBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#1A212D"))
-            cornerRadius = 12f
-            setStroke(2, Color.parseColor("#55FFFFFF"))
-        }
-        val focusedEditBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#1A212D"))
-            cornerRadius = 12f
-            setStroke(3, Color.parseColor("#2979FF"))
-        }
-        etM3uUrl.background = defaultEditBg
-        etM3uUrl.setTextColor(Color.WHITE)
-        etM3uUrl.setHintTextColor(Color.parseColor("#90A4AE"))
-        etM3uUrl.setOnFocusChangeListener { _, hasFocus ->
-            etM3uUrl.background = if (hasFocus) focusedEditBg else defaultEditBg
+        val inputs = listOf(etM3uUrl, etEpgUrl)
+        for (input in inputs) {
+            input.backgroundTintList = null
+            val defaultEditBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#1A212D"))
+                cornerRadius = 12f
+                setStroke(2, Color.parseColor("#55FFFFFF"))
+            }
+            val focusedEditBg = GradientDrawable().apply {
+                setColor(Color.parseColor("#1A212D"))
+                cornerRadius = 12f
+                setStroke(3, Color.parseColor("#2979FF"))
+            }
+            input.background = defaultEditBg
+            input.setTextColor(Color.WHITE)
+            input.setHintTextColor(Color.parseColor("#90A4AE"))
+            input.setOnFocusChangeListener { _, hasFocus ->
+                input.background = if (hasFocus) focusedEditBg else defaultEditBg
+            }
         }
 
         val dialogButtons = listOf(btnSaveUrl, btnCloseSettings)
@@ -245,41 +478,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initPlayer() {
-        if (player == null) {
-            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("Mozilla/5.0")
-                .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(15000)
-                .setReadTimeoutMs(15000)
-
-            val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
-
-            player = ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .build()
-
-            playerView.player = player
-            playerView.useController = false
-
-            player?.addListener(object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    runOnUiThread {
-                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            })
-        }
-    }
-
     override fun onStart() {
         super.onStart()
-        initPlayer()
+        initPlayers()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedUrl = prefs.getString("M3U_URL", "") ?: ""
 
         if (savedUrl.isNotEmpty()) {
-            fetchM3U(savedUrl, autoPlay = (player?.isPlaying != true))
+            fetchM3U(savedUrl, autoPlay = (players[0]?.isPlaying != true))
         } else {
             showSettingsDialog()
         }
@@ -287,20 +493,21 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        player?.playWhenReady = false
+        for (p in players) p?.playWhenReady = false
     }
 
     override fun onStop() {
         super.onStop()
-        player?.stop()
-        player?.release()
-        player = null
+        for (i in 0 until 4) {
+            players[i]?.stop()
+            players[i]?.release()
+            players[i] = null
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        player?.release()
-        player = null
+        for (p in players) p?.release()
         handler.removeCallbacksAndMessages(null)
     }
 
@@ -384,11 +591,34 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
+        etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveUrl.requestFocus()
     }
 
+    private fun showSyncCard() {
+        tvSyncChannels.text = "Channels: Загрузка..."
+        tvSyncLogos.text = "Logotypes: -"
+        tvSyncPrograms.text = "Programs: -"
+        syncStatusCard.visibility = View.VISIBLE
+        hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
+
+        maxSyncTimeoutRunnable?.let { handler.removeCallbacks(it) }
+        val rTimeout = Runnable { syncStatusCard.visibility = View.GONE }
+        maxSyncTimeoutRunnable = rTimeout
+        handler.postDelayed(rTimeout, 10000)
+    }
+
+    private fun scheduleHideSyncCard(delayMs: Long = 3000) {
+        hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { syncStatusCard.visibility = View.GONE }
+        hideSyncCardRunnable = r
+        handler.postDelayed(r, delayMs)
+    }
+
     private fun fetchM3U(url: String, autoPlay: Boolean) {
+        runOnUiThread { showSyncCard() }
+
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
@@ -411,6 +641,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(applicationContext, "Не удалось загрузить плейлист", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
+                    scheduleHideSyncCard(1000)
                 }
             }
 
@@ -421,6 +652,7 @@ class MainActivity : AppCompatActivity() {
                             Toast.makeText(applicationContext, "Ошибка сервера: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
+                        scheduleHideSyncCard(1000)
                     }
                     return
                 }
@@ -428,13 +660,32 @@ class MainActivity : AppCompatActivity() {
                 val body = response.body?.string() ?: return
 
                 val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                val lastPlayedUrl = if (currentPlayingIndexInAll in allChannels.indices) {
-                    allChannels[currentPlayingIndexInAll].streamUrl
+                val lastPlayedUrl = if (slotCurrentChannelIndex[0] in allChannels.indices) {
+                    allChannels[slotCurrentChannelIndex[0]].streamUrl
                 } else {
                     prefs.getString("LAST_CHANNEL_URL", "") ?: ""
                 }
 
                 parseM3U(body)
+
+                val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
+
+                runOnUiThread {
+                    tvSyncChannels.text = "Channels: ${allChannels.size}"
+                    tvSyncLogos.text = "Logotypes: $logosCount"
+                }
+
+                val customEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
+                val targetEpg = if (customEpg.isNotEmpty() && customEpg.startsWith("http")) customEpg else detectedPlaylistEpgUrl
+
+                if (targetEpg.isNotEmpty() && targetEpg.startsWith("http")) {
+                    fetchEPGOptimized(targetEpg)
+                } else {
+                    runOnUiThread {
+                        tvSyncPrograms.text = "Programs: -"
+                        scheduleHideSyncCard(2500)
+                    }
+                }
 
                 runOnUiThread {
                     setupCategoryAdapter()
@@ -448,10 +699,10 @@ class MainActivity : AppCompatActivity() {
                             0
                         }
 
-                        if (autoPlay || player?.isPlaying != true) {
-                            playChannelByAllIndex(resumeIndex)
+                        if (autoPlay || players[0]?.isPlaying != true) {
+                            playChannelInSlot(0, resumeIndex)
                         } else {
-                            currentPlayingIndexInAll = resumeIndex
+                            slotCurrentChannelIndex[0] = resumeIndex
                         }
                     } else {
                         Toast.makeText(applicationContext, "Каналы не найдены", Toast.LENGTH_LONG).show()
@@ -467,21 +718,32 @@ class MainActivity : AppCompatActivity() {
         var currentName = ""
         var currentLogo = ""
         var currentGroup = ""
+        var currentTvgId = ""
         var counter = 1
+        detectedPlaylistEpgUrl = ""
 
         val tempChannels = mutableListOf<Channel>()
         val tempCategories = LinkedHashSet<String>()
         tempCategories.add("Все")
         tempCategories.add("Избранное")
 
-        // Универсальные регулярные выражения для логотипов и групп
         val groupRegex = Regex("""group-title\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
         val logoRegex = Regex("""(?:tvg-logo|logo)\s*=\s*["']?([^"',\s\r\n]+)["']?""", RegexOption.IGNORE_CASE)
+        val idRegex = Regex("""tvg-id\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
+        val epgHeaderRegex = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*["']?([^"'\r\n]+)["']?""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
             val trimmed = line.trim()
-            if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
+            if (trimmed.startsWith("#EXTM3U", ignoreCase = true)) {
+                val epgMatch = epgHeaderRegex.find(trimmed)
+                val rawEpg = epgMatch?.groups?.get(1)?.value?.trim() ?: ""
+                if (rawEpg.isNotEmpty()) {
+                    val candidate = rawEpg.split(",").firstOrNull { it.trim().startsWith("http") }?.trim() ?: ""
+                    if (candidate.isNotEmpty()) detectedPlaylistEpgUrl = candidate
+                }
+            } else if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
                 currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
+                currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 if (groupFound.isNotEmpty()) {
                     currentGroup = groupFound
@@ -507,11 +769,12 @@ class MainActivity : AppCompatActivity() {
                         name = name,
                         logoUrl = currentLogo,
                         streamUrl = trimmed,
-                        category = cat
+                        category = cat,
+                        tvgId = currentTvgId
                     )
                 )
                 counter++
-                currentName = ""; currentLogo = ""; currentGroup = ""
+                currentName = ""; currentLogo = ""; currentGroup = ""; currentTvgId = ""
             }
         }
 
@@ -519,6 +782,203 @@ class MainActivity : AppCompatActivity() {
         allChannels.addAll(tempChannels)
         categories.clear()
         categories.addAll(tempCategories)
+    }
+
+    private fun normalizeName(text: String): String {
+        return text.lowercase(Locale.ROOT)
+            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps)\b"""), "")
+            .replace(Regex("""[^a-z0-9а-яёәғçşöüı]"""), "")
+            .trim()
+    }
+
+    private fun fetchEPGOptimized(epgUrl: String) {
+        runOnUiThread { tvSyncPrograms.text = "Programs: Загрузка..." }
+
+        val client = OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder()
+            .url(epgUrl)
+            .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("Pragma", "no-cache")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    tvSyncPrograms.text = "Programs: -"
+                    scheduleHideSyncCard(2000)
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        tvSyncPrograms.text = "Programs: -"
+                        scheduleHideSyncCard(2000)
+                    }
+                    return
+                }
+
+                val bodyStream = response.body?.byteStream()
+                if (bodyStream == null) {
+                    runOnUiThread { scheduleHideSyncCard(1000) }
+                    return
+                }
+
+                Thread({
+                    var parsedCount = 0
+                    try {
+                        val buffered = BufferedInputStream(bodyStream)
+                        buffered.mark(2)
+                        val b1 = buffered.read()
+                        val b2 = buffered.read()
+                        buffered.reset()
+
+                        val isGzip = (b1 == 0x1f && b2 == 0x8b) || epgUrl.endsWith(".gz", ignoreCase = true)
+                        val inStream: InputStream = if (isGzip) GZIPInputStream(buffered) else buffered
+
+                        val parser = Xml.newPullParser()
+                        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+                        parser.setInput(inStream, null)
+
+                        val now = System.currentTimeMillis()
+                        val channelIdToNames = HashMap<String, MutableList<String>>()
+                        val livePrograms = HashMap<String, String>()
+
+                        var eventType = parser.eventType
+                        var currentChannelId = ""
+                        var inChannel = false
+                        var inProgramme = false
+                        var progChannel = ""
+                        var isCurrentProg = false
+                        var progTitle = ""
+
+                        while (eventType != XmlPullParser.END_DOCUMENT) {
+                            when (eventType) {
+                                XmlPullParser.START_TAG -> {
+                                    when (parser.name) {
+                                        "channel" -> {
+                                            inChannel = true
+                                            currentChannelId = parser.getAttributeValue(null, "id")?.trim() ?: ""
+                                            if (currentChannelId.isNotEmpty()) {
+                                                channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }
+                                            }
+                                        }
+                                        "display-name" -> {
+                                            if (inChannel && currentChannelId.isNotEmpty()) {
+                                                val dName = parser.nextText().trim()
+                                                if (dName.isNotEmpty()) {
+                                                    channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }.add(dName)
+                                                }
+                                            }
+                                        }
+                                        "programme" -> {
+                                            parsedCount++
+                                            val startStr = parser.getAttributeValue(null, "start") ?: ""
+                                            val stopStr = parser.getAttributeValue(null, "stop") ?: ""
+                                            progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
+                                            val startMs = parseXmlTvTime(startStr)
+                                            val stopMs = parseXmlTvTime(stopStr)
+
+                                            if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
+                                                inProgramme = true
+                                                isCurrentProg = true
+                                                progTitle = ""
+                                            }
+                                        }
+                                        "title" -> {
+                                            if (inProgramme && isCurrentProg) {
+                                                progTitle = parser.nextText().trim()
+                                            }
+                                        }
+                                    }
+                                }
+                                XmlPullParser.END_TAG -> {
+                                    when (parser.name) {
+                                        "channel" -> {
+                                            inChannel = false
+                                            currentChannelId = ""
+                                        }
+                                        "programme" -> {
+                                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty() && progChannel.isNotEmpty()) {
+                                                livePrograms[progChannel.lowercase(Locale.ROOT)] = progTitle
+                                            }
+                                            inProgramme = false
+                                            isCurrentProg = false
+                                        }
+                                    }
+                                }
+                            }
+                            eventType = parser.next()
+                        }
+
+                        val mappedPrograms = HashMap<String, String>()
+                        for ((chId, title) in livePrograms) {
+                            mappedPrograms[chId] = title
+                            channelIdToNames[chId]?.forEach { name ->
+                                mappedPrograms[normalizeName(name)] = title
+                            }
+                        }
+
+                        currentProgramsMap.clear()
+                        currentProgramsMap.putAll(mappedPrograms)
+
+                        runOnUiThread {
+                            tvSyncPrograms.text = "Programs: $parsedCount"
+                            recyclerViewChannels.adapter?.notifyDataSetChanged()
+                            val curChIdx = slotCurrentChannelIndex[activeSlotIndex]
+                            if (infoBanner.visibility == View.VISIBLE && curChIdx in allChannels.indices) {
+                                showInfoBanner(allChannels[curChIdx])
+                            }
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread { tvSyncPrograms.text = "Programs: -" }
+                    } finally {
+                        try {
+                            bodyStream.close()
+                        } catch (_: Exception) {}
+                        runOnUiThread { scheduleHideSyncCard(2500) }
+                    }
+                }, "EpgStreamWorker").start()
+            }
+        })
+    }
+
+    private fun parseXmlTvTime(timeStr: String): Long {
+        if (timeStr.length < 14) return 0L
+        val clean = timeStr.trim()
+        return try {
+            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
+                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+                format.parse(clean)?.time ?: 0L
+            } else {
+                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                format.timeZone = TimeZone.getDefault()
+                format.parse(clean.substring(0, 14))?.time ?: 0L
+            }
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private fun getProgramForChannel(ch: Channel): String {
+        if (currentProgramsMap.isEmpty()) return ""
+        if (ch.tvgId.isNotEmpty()) {
+            currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
+        }
+        val normalized = normalizeName(ch.name)
+        if (normalized.isNotEmpty()) {
+            currentProgramsMap[normalized]?.let { return it }
+        }
+        currentProgramsMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
+        return ""
     }
 
     private fun filterChannels(category: String) {
@@ -535,12 +995,13 @@ class MainActivity : AppCompatActivity() {
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
         categoryPanel.visibility = View.GONE
-        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
+        val curChIdx = slotCurrentChannelIndex[activeSlotIndex]
+        if (allChannels.isEmpty() || curChIdx !in allChannels.indices) {
             filterChannels(selectedCategory)
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
             return
         }
-        val currentChannel = allChannels[currentPlayingIndexInAll]
+        val currentChannel = allChannels[curChIdx]
         val inCurrentCat = when (selectedCategory) {
             "Все" -> true
             "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
@@ -552,11 +1013,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun focusCurrentChannelCentered() {
-        if (allChannels.isEmpty() || currentPlayingIndexInAll !in allChannels.indices) {
+        val curChIdx = slotCurrentChannelIndex[activeSlotIndex]
+        if (allChannels.isEmpty() || curChIdx !in allChannels.indices) {
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
             return
         }
-        val currentChannel = allChannels[currentPlayingIndexInAll]
+        val currentChannel = allChannels[curChIdx]
         val targetPos = displayedChannels.indexOfFirst { it.number == currentChannel.number }.coerceAtLeast(0)
 
         recyclerViewChannels.post {
@@ -690,7 +1152,14 @@ class MainActivity : AppCompatActivity() {
                 tvNum.text = ch.number.toString()
                 tvName.text = ch.name
 
-                tvProg?.visibility = View.GONE
+                val currentProg = getProgramForChannel(ch)
+                if (currentProg.isNotEmpty()) {
+                    tvProg?.text = currentProg
+                    tvProg?.visibility = View.VISIBLE
+                } else {
+                    tvProg?.text = ""
+                    tvProg?.visibility = View.GONE
+                }
 
                 if (favoriteUrls.contains(ch.streamUrl)) {
                     tvFavStar?.visibility = View.VISIBLE
@@ -731,7 +1200,9 @@ class MainActivity : AppCompatActivity() {
 
                 row.setOnClickListener {
                     val allIndex = allChannels.indexOf(ch)
-                    if (allIndex != -1) playChannelByAllIndex(allIndex)
+                    if (allIndex != -1) {
+                        playChannelInSlot(activeSlotIndex, allIndex)
+                    }
                     channelPanel.visibility = View.GONE
                 }
 
@@ -774,38 +1245,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun playChannelByAllIndex(index: Int) {
-        if (index !in allChannels.indices) return
-        
-        if (currentPlayingIndexInAll != -1 && currentPlayingIndexInAll != index) {
-            previousPlayingIndexInAll = currentPlayingIndexInAll
-        }
-
-        currentPlayingIndexInAll = index
-        val channel = allChannels[index]
-
-        getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-            .edit()
-            .putString("LAST_CHANNEL_URL", channel.streamUrl)
-            .apply()
-
-        initPlayer()
-        val streamUri = Uri.parse(channel.streamUrl)
-        val mediaItem = MediaItem.fromUri(streamUri)
-
-        player?.setMediaItem(mediaItem)
-        player?.prepare()
-        player?.playWhenReady = true
-        showInfoBanner(channel)
-    }
-
     private fun stepChannelInCurrentCategory(step: Int) {
         val list = if (displayedChannels.isNotEmpty()) displayedChannels else allChannels
         if (list.isEmpty()) return
 
-        val currentPlayingChannel = if (currentPlayingIndexInAll in allChannels.indices) {
-            allChannels[currentPlayingIndexInAll]
-        } else null
+        val curIdx = slotCurrentChannelIndex[activeSlotIndex]
+        val currentPlayingChannel = if (curIdx in allChannels.indices) allChannels[curIdx] else null
 
         val currentPosInDisplayed = list.indexOfFirst { it.streamUrl == currentPlayingChannel?.streamUrl }
         val nextPos = if (currentPosInDisplayed != -1) {
@@ -817,7 +1262,7 @@ class MainActivity : AppCompatActivity() {
         val targetChannel = list[nextPos]
         val targetIndexInAll = allChannels.indexOf(targetChannel)
         if (targetIndexInAll != -1) {
-            playChannelByAllIndex(targetIndexInAll)
+            playChannelInSlot(activeSlotIndex, targetIndexInAll)
         }
     }
 
@@ -826,19 +1271,34 @@ class MainActivity : AppCompatActivity() {
         tvBannerName.text = channel.name
         val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★" else ""
 
-        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav"
+        val prog = getProgramForChannel(channel)
+        val progText = if (prog.isNotEmpty()) "  |  🔹 $prog" else ""
+        val slotText = if (currentScreenMode > 1) " [Окно ${activeSlotIndex + 1}]" else ""
+
+        tvBannerCategory.text = "● ${channel.category.uppercase()}$slotText$isFav$progText"
 
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { infoBanner.visibility = View.GONE }
         bannerRunnable = r
-        handler.postDelayed(r, 4000)
+        handler.postDelayed(r, 5000)
+    }
+
+    private fun switchActiveSlot(direction: Int) {
+        if (currentScreenMode <= 1) return
+        activeSlotIndex = (activeSlotIndex + direction + currentScreenMode) % currentScreenMode
+        refreshSlotHighlightsAndAudio()
+        val curCh = slotCurrentChannelIndex[activeSlotIndex]
+        if (curCh in allChannels.indices) {
+            showInfoBanner(allChannels[curCh])
+        }
     }
 
     private fun exitApplicationCompletely() {
-        player?.stop()
-        player?.release()
-        player = null
+        for (p in players) {
+            p?.stop()
+            p?.release()
+        }
         finishAffinity()
     }
 
@@ -901,10 +1361,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Если баннер открыт и фокус попал на кнопку мульти-экрана
+        if (infoBanner.visibility == View.VISIBLE && btnMultiScreenToggle.hasFocus()) {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                infoBanner.visibility = View.GONE
+                return true
+            }
+            return super.onKeyDown(keyCode, event)
+        }
+
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                if (previousPlayingIndexInAll in allChannels.indices && previousPlayingIndexInAll != currentPlayingIndexInAll) {
-                    playChannelByAllIndex(previousPlayingIndexInAll)
+                if (currentScreenMode > 1) {
+                    // Возврат в режим одного экрана
+                    updateMultiViewLayout(1)
                     return true
                 }
 
@@ -919,8 +1389,9 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                if (allChannels.isNotEmpty() && currentPlayingIndexInAll in allChannels.indices) {
-                    showInfoBanner(allChannels[currentPlayingIndexInAll])
+                val curIdx = slotCurrentChannelIndex[activeSlotIndex]
+                if (allChannels.isNotEmpty() && curIdx in allChannels.indices) {
+                    showInfoBanner(allChannels[curIdx])
                     return true
                 }
             }
@@ -929,12 +1400,29 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                if (infoBanner.visibility == View.VISIBLE) {
+                    btnMultiScreenToggle.requestFocus()
+                    return true
+                }
                 stepChannelInCurrentCategory(-1)
                 return true
             }
-            KeyEvent.KEYCODE_DPAD_LEFT -> { openChannelPanelCenteredOnCurrent(); return true }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (currentScreenMode > 1) {
+                    switchActiveSlot(-1)
+                    return true
+                }
+                openChannelPanelCenteredOnCurrent()
+                return true
+            }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                numPadPanel.visibility = View.VISIBLE; digitInputBuffer.clear(); tvNumpadDisplay.text = "---"
+                if (currentScreenMode > 1) {
+                    switchActiveSlot(1)
+                    return true
+                }
+                numPadPanel.visibility = View.VISIBLE
+                digitInputBuffer.clear()
+                tvNumpadDisplay.text = "---"
                 findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
                 return true
             }
@@ -962,8 +1450,13 @@ class MainActivity : AppCompatActivity() {
         val targetNumber = digitInputBuffer.toString().toIntOrNull()
         if (targetNumber != null) {
             val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
-            if (foundIndex != -1) { playChannelByAllIndex(foundIndex); numPadPanel.visibility = View.GONE }
-            else { Toast.makeText(applicationContext, "Канал не найден", Toast.LENGTH_SHORT).show(); tvNumpadDisplay.text = "---" }
+            if (foundIndex != -1) {
+                playChannelInSlot(activeSlotIndex, foundIndex)
+                numPadPanel.visibility = View.GONE
+            } else {
+                Toast.makeText(applicationContext, "Канал не найден", Toast.LENGTH_SHORT).show()
+                tvNumpadDisplay.text = "---"
+            }
         }
         digitInputBuffer.clear()
     }
