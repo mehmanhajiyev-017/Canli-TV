@@ -5,14 +5,14 @@
     android:background="#000000"
     android:keepScreenOn="true">
 
-    <!-- Основной видеоплеер -->
+    <!-- Video Pleyer -->
     <com.google.android.exoplayer2.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:focusable="false" />
 
-    <!-- Панель категорий (слева) -->
+    <!-- Kateqoriyalar Paneli (Sol) -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="260dp"
@@ -65,7 +65,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Панель списка каналов -->
+    <!-- Kanallar Paneli -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="380dp"
@@ -82,7 +82,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Информационный баннер внизу экрана -->
+    <!-- Aşağı İnfo Banner -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -125,7 +125,7 @@
             android:layout_marginTop="4dp" />
     </LinearLayout>
 
-    <!-- Цифровая клавиатура (Numpad) строго по центру справа -->
+    <!-- Numpad Paneli -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="220dp"
@@ -168,10 +168,10 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Окно настроек с раздельным вводом Playlist и EPG -->
+    <!-- Yeni "Настройки" Dialoqu: OK və ↻ düymələri ilə -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
-        android:layout_width="520dp"
+        android:layout_width="540dp"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
         android:background="#F0101420"
@@ -189,7 +189,7 @@
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
-        <!-- Блок 1: Плейлист -->
+        <!-- 1. M3U Sətri -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -202,6 +202,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_marginBottom="18dp">
 
             <EditText
@@ -209,23 +210,34 @@
                 android:layout_width="0dp"
                 android:layout_height="46dp"
                 android:layout_weight="1"
-                android:hint="Вставьте ссылку на M3U"
+                android:hint="Вставьте M3U ссылку"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:layout_marginEnd="8dp" />
 
             <Button
                 android:id="@+id/btnSaveM3u"
-                android:layout_width="wrap_content"
+                android:layout_width="56dp"
                 android:layout_height="46dp"
-                android:text="Загрузить M3U" />
+                android:text="OK"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:layout_marginEnd="6dp" />
+
+            <Button
+                android:id="@+id/btnRefreshM3u"
+                android:layout_width="52dp"
+                android:layout_height="46dp"
+                android:text="↻"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp" />
         </LinearLayout>
 
-        <!-- Блок 2: EPG телепрограмма -->
+        <!-- 2. EPG Sətri -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="2. Телепрограмма (EPG XMLTV / .gz URL):"
+            android:text="2. Телепрограмма (EPG URL):"
             android:textColor="#B0BEC5"
             android:textSize="13sp"
             android:layout_marginBottom="6dp" />
@@ -234,6 +246,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_marginBottom="24dp">
 
             <EditText
@@ -241,16 +254,27 @@
                 android:layout_width="0dp"
                 android:layout_height="46dp"
                 android:layout_weight="1"
-                android:hint="Вставьте ссылку на EPG (XMLTV)"
+                android:hint="Вставьте EPG ссылку (.xml / .gz)"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:layout_marginEnd="8dp" />
 
             <Button
                 android:id="@+id/btnSaveEpg"
-                android:layout_width="wrap_content"
+                android:layout_width="56dp"
                 android:layout_height="46dp"
-                android:text="Загрузить EPG" />
+                android:text="OK"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:layout_marginEnd="6dp" />
+
+            <Button
+                android:id="@+id/btnRefreshEpg"
+                android:layout_width="52dp"
+                android:layout_height="46dp"
+                android:text="↻"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -265,7 +289,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Компактная плашка статуса (справа вверху) -->
+    <!-- Sağ yuxarı status kartı -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
