@@ -75,6 +75,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
 
+    // Statistika kartı üçün görünüşlər
+    private lateinit var syncStatusCard: View
+    private lateinit var tvSyncUrl: TextView
+    private lateinit var tvSyncChannels: TextView
+    private lateinit var tvSyncLogos: TextView
+    private lateinit var tvSyncPrograms: TextView
+
     private val allChannels = mutableListOf<Channel>()
     private val displayedChannels = mutableListOf<Channel>()
     private val categories = mutableListOf<String>()
@@ -83,6 +90,7 @@ class MainActivity : AppCompatActivity() {
 
     private val epgMap = ConcurrentHashMap<String, String>()
     private var detectedPlaylistEpgUrl: String = ""
+    private var totalEpgProgramsCount = 0
 
     private var currentPlayingIndexInAll = -1
     private var previousPlayingIndexInAll = -1
@@ -92,10 +100,11 @@ class MainActivity : AppCompatActivity() {
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
+    private var hideSyncCardRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Ekranin sonmesini ve yuxu rejimini tamamile bloklayir
+        // Ekranın sönməsinin qarşısını alır
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
@@ -116,6 +125,20 @@ class MainActivity : AppCompatActivity() {
         tvBannerNumber = findViewById(R.id.tvBannerNumber)
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
+
+        // Statistika kartı elementləri
+        syncStatusCard = findViewById(R.id.syncStatusCard)
+        tvSyncUrl = findViewById(R.id.tvSyncUrl)
+        tvSyncChannels = findViewById(R.id.tvSyncChannels)
+        tvSyncLogos = findViewById(R.id.tvSyncLogos)
+        tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
+
+        // Şəffaf və qəşəng arxa fon
+        syncStatusCard.background = GradientDrawable().apply {
+            setColor(Color.parseColor("#991C222E"))
+            cornerRadius = 18f
+            setStroke(2, Color.parseColor("#44FFFFFF"))
+        }
 
         categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
         channelPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
@@ -416,7 +439,25 @@ class MainActivity : AppCompatActivity() {
         btnSaveUrl.requestFocus()
     }
 
+    private fun showSyncCard(url: String) {
+        tvSyncUrl.text = "($url)"
+        tvSyncChannels.text = "Channels: Yüklənir..."
+        tvSyncLogos.text = "Logotypes: -"
+        tvSyncPrograms.text = "Programs: -"
+        syncStatusCard.visibility = View.VISIBLE
+        hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
+    }
+
+    private fun scheduleHideSyncCard() {
+        hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { syncStatusCard.visibility = View.GONE }
+        hideSyncCardRunnable = r
+        handler.postDelayed(r, 4000)
+    }
+
     private fun fetchM3U(url: String, autoPlay: Boolean) {
+        runOnUiThread { showSyncCard(url) }
+
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
@@ -439,6 +480,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
+                    scheduleHideSyncCard()
                 }
             }
 
@@ -449,6 +491,7 @@ class MainActivity : AppCompatActivity() {
                             Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
+                        scheduleHideSyncCard()
                     }
                     return
                 }
@@ -464,6 +507,13 @@ class MainActivity : AppCompatActivity() {
 
                 parseM3U(body)
 
+                val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
+
+                runOnUiThread {
+                    tvSyncChannels.text = "Channels: ${allChannels.size}"
+                    tvSyncLogos.text = "Logotypes: $logosCount"
+                }
+
                 val savedEpg = prefs.getString("EPG_URL", "")?.trim() ?: ""
                 val finalEpgUrl = if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
                     savedEpg
@@ -473,6 +523,8 @@ class MainActivity : AppCompatActivity() {
 
                 if (finalEpgUrl.isNotEmpty() && finalEpgUrl.startsWith("http")) {
                     fetchEPG(finalEpgUrl)
+                } else {
+                    runOnUiThread { scheduleHideSyncCard() }
                 }
 
                 runOnUiThread {
@@ -593,10 +645,15 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {}
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread { scheduleHideSyncCard() }
+            }
 
             override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) return
+                if (!response.isSuccessful) {
+                    runOnUiThread { scheduleHideSyncCard() }
+                    return
+                }
                 val bodyStream = response.body?.byteStream() ?: return
                 try {
                     val isGzip = epgUrl.endsWith(".gz", ignoreCase = true) ||
@@ -609,6 +666,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         bodyStream.close()
                     } catch (_: Exception) {}
+                    runOnUiThread { scheduleHideSyncCard() }
                 }
             }
         })
@@ -622,6 +680,7 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val channelIdToNames = HashMap<String, MutableList<String>>()
         val tempProgByChannel = HashMap<String, String>()
+        var progCounter = 0
 
         var eventType = parser.eventType
         var currentChannelId = ""
@@ -652,6 +711,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         "programme" -> {
+                            progCounter++
                             val startStr = parser.getAttributeValue(null, "start") ?: ""
                             val stopStr = parser.getAttributeValue(null, "stop") ?: ""
                             progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
@@ -701,10 +761,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        totalEpgProgramsCount = progCounter
         epgMap.clear()
         epgMap.putAll(finalEpg)
 
         runOnUiThread {
+            tvSyncPrograms.text = "Programs: $totalEpgProgramsCount"
             recyclerViewChannels.adapter?.notifyDataSetChanged()
             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndexInAll in allChannels.indices) {
                 showInfoBanner(allChannels[currentPlayingIndexInAll])
