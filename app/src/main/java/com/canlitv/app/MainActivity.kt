@@ -75,7 +75,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
 
-    // Statistika kartı üçün görünüşlər
     private lateinit var syncStatusCard: View
     private lateinit var tvSyncUrl: TextView
     private lateinit var tvSyncChannels: TextView
@@ -104,7 +103,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Ekranın sönməsinin qarşısını alır
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
 
@@ -126,14 +124,12 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
-        // Statistika kartı elementləri
         syncStatusCard = findViewById(R.id.syncStatusCard)
         tvSyncUrl = findViewById(R.id.tvSyncUrl)
         tvSyncChannels = findViewById(R.id.tvSyncChannels)
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
 
-        // Şəffaf və qəşəng arxa fon
         syncStatusCard.background = GradientDrawable().apply {
             setColor(Color.parseColor("#991C222E"))
             cornerRadius = 18f
@@ -148,8 +144,6 @@ class MainActivity : AppCompatActivity() {
             cornerRadius = 20f
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
-
-        findViewById<View?>(R.id.btnOpenSearch)?.visibility = View.GONE
 
         (categoryPanel as? LinearLayout)?.let { panel ->
             panel.removeView(btnOpenSettings)
