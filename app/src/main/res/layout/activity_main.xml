@@ -63,7 +63,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Kanallar Paneli (Sol tərəfdə açılan siyahı) -->
+    <!-- Kanallar Paneli -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="380dp"
@@ -79,7 +79,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Məlumat Banneri (Aşağıda kanal adı və cari proqram) -->
+    <!-- Məlumat Banneri (Aşağıda) -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -121,7 +121,7 @@
             android:layout_marginTop="4dp" />
     </LinearLayout>
 
-    <!-- Rəqəm Paneli (Numpad) -->
+    <!-- Rəqəm Paneli -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="220dp"
@@ -163,7 +163,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Ayarlar Dialoq Pəncərəsi -->
+    <!-- Ayarlar Dialoqu -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="500dp"
@@ -197,7 +197,7 @@
             android:id="@+id/etEpgUrl"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:hint="EPG URL (XMLTV və ya .xml.gz)"
+            android:hint="EPG URL (Boş qala bilər)"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
             android:layout_marginBottom="18dp" />
@@ -221,68 +221,49 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- YENİ: Playlist və EPG Yüklənmə Statistikası Kartı -->
+    <!-- SAĞ YUXARI: Yığcam və Zərif Statistika Kartı -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
-        android:layout_width="340dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
+        android:layout_alignParentEnd="true"
         android:layout_alignParentTop="true"
-        android:layout_marginStart="36dp"
-        android:layout_marginTop="36dp"
+        android:layout_marginEnd="28dp"
+        android:layout_marginTop="28dp"
         android:orientation="vertical"
-        android:padding="18dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
         android:visibility="gone"
         android:elevation="25dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Playlist"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvSyncUrl"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="(https://...)"
-            android:textColor="#ECEFF1"
-            android:textSize="13sp"
-            android:maxLines="2"
-            android:ellipsize="middle"
-            android:layout_marginTop="2dp"
-            android:layout_marginBottom="10dp" />
 
         <TextView
             android:id="@+id/tvSyncChannels"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Channels: Yüklənir..."
-            android:textColor="#ECEFF1"
-            android:textSize="15sp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:layout_marginBottom="3dp" />
+            android:layout_marginBottom="2dp" />
 
         <TextView
             android:id="@+id/tvSyncLogos"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Logotypes: -"
-            android:textColor="#ECEFF1"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="3dp" />
+            android:textColor="#B0BEC5"
+            android:textSize="12sp"
+            android:layout_marginBottom="2dp" />
 
         <TextView
             android:id="@+id/tvSyncPrograms"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Programs: -"
-            android:textColor="#ECEFF1"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:textColor="#B0BEC5"
+            android:textSize="12sp" />
     </LinearLayout>
 
 </RelativeLayout>
