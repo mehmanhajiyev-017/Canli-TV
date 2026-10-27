@@ -95,6 +95,10 @@ class MainActivity : AppCompatActivity() {
     private var previousPlayingIndex = -1
     private var doubleBackToExitPressedOnce = false
 
+    // Статические фоны для исключения сборщика мусора (GC) и ускорения фокуса
+    private lateinit var rowDefaultBg: GradientDrawable
+    private lateinit var rowFocusedBg: GradientDrawable
+
     private val handler = Handler(Looper.getMainLooper())
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
@@ -106,6 +110,17 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
+
+        // Предварительное создание статических стилей фокуса
+        rowDefaultBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#33151A22"))
+            cornerRadius = 12f
+        }
+        rowFocusedBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#402979FF"))
+            cornerRadius = 12f
+            setStroke(2, Color.parseColor("#80FFFFFF"))
+        }
 
         playerView = findViewById(R.id.playerView)
         channelPanel = findViewById(R.id.channelPanel)
@@ -137,25 +152,10 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#44FFFFFF"))
         }
 
-        categoryPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
-        channelPanel.setBackgroundColor(Color.parseColor("#800B0E14"))
-        infoBanner.setBackgroundColor(Color.parseColor("#880B0E14"))
         numPadPanel.background = GradientDrawable().apply {
             setColor(Color.parseColor("#990B0E14"))
             cornerRadius = 20f
             setStroke(2, Color.parseColor("#33FFFFFF"))
-        }
-
-        (categoryPanel as? LinearLayout)?.let { panel ->
-            panel.removeView(btnOpenSettings)
-            val params = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (52 * resources.displayMetrics.density).toInt()
-            ).apply {
-                topMargin = (10 * resources.displayMetrics.density).toInt()
-            }
-            btnOpenSettings.layoutParams = params
-            panel.addView(btnOpenSettings)
         }
 
         loadFavorites()
@@ -212,10 +212,14 @@ class MainActivity : AppCompatActivity() {
 
         initPlayer()
 
+        // Оптимизация списков для мгновенной прокрутки без рывков
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
-        recyclerViewCategories.layoutManager = LinearLayoutManager(this)
+        recyclerViewChannels.setHasFixedSize(true)
+        recyclerViewChannels.setItemViewCacheSize(20)
 
-        // Раздельное сохранение и загрузка M3U
+        recyclerViewCategories.layoutManager = LinearLayoutManager(this)
+        recyclerViewCategories.setHasFixedSize(true)
+
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
@@ -229,7 +233,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Раздельное сохранение и фоновая загрузка EPG
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
@@ -362,7 +365,6 @@ class MainActivity : AppCompatActivity() {
             showSettingsDialog()
         }
 
-        // Если есть сохраненный EPG, запускаем его фоновый прием
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
             fetchEPGDirectly(savedEpg)
         }
@@ -482,25 +484,24 @@ class MainActivity : AppCompatActivity() {
         maxSyncTimeoutRunnable?.let { handler.removeCallbacks(it) }
         val rTimeout = Runnable { syncStatusCard.visibility = View.GONE }
         maxSyncTimeoutRunnable = rTimeout
-        handler.postDelayed(rTimeout, 8000)
+        handler.postDelayed(rTimeout, 7000)
     }
 
-    private fun scheduleHideSyncCard(delayMs: Long = 3000) {
+    private fun scheduleHideSyncCard(delayMs: Long = 2500) {
         hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { syncStatusCard.visibility = View.GONE }
         hideSyncCardRunnable = r
         handler.postDelayed(r, delayMs)
     }
 
-    // Независимый прием плейлиста M3U
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         runOnUiThread { showSyncCard("Channels: Загрузка...", "Logotypes: -", "EPG: -") }
 
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(25, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -579,7 +580,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Независимый прием EPG
     private fun fetchEPGDirectly(epgUrl: String) {
         runOnUiThread {
             showSyncCard("Channels: ${allChannels.size}", "Logotypes: ${allChannels.count { it.logoUrl.isNotEmpty() }}", "EPG: Загрузка...")
@@ -623,6 +623,7 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
+                // Обработка EPG с пониженным приоритетом потока для плавности UI
                 Thread({
                     var parsedCount = 0
                     try {
@@ -722,7 +723,7 @@ class MainActivity : AppCompatActivity() {
                         currentProgramsMap.putAll(mappedPrograms)
 
                         runOnUiThread {
-                            tvSyncPrograms.text = "EPG: $parsedCount программ"
+                            tvSyncPrograms.text = "EPG: $parsedCount"
                             recyclerViewChannels.adapter?.notifyDataSetChanged()
                             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
                                 showInfoBanner(allChannels[currentPlayingIndex])
@@ -736,7 +737,9 @@ class MainActivity : AppCompatActivity() {
                         } catch (_: Exception) {}
                         runOnUiThread { scheduleHideSyncCard(2500) }
                     }
-                }, "IndependentEpgWorker").start()
+                }, "FastEpgWorker").apply {
+                    priority = Thread.MIN_PRIORITY
+                }.start()
             }
         })
     }
@@ -903,6 +906,7 @@ class MainActivity : AppCompatActivity() {
                     gravity = android.view.Gravity.CENTER_VERTICAL
                     isFocusable = true
                     isClickable = true
+                    background = rowDefaultBg
                 }
                 val iconView = TextView(this@MainActivity).apply { 
                     id = View.generateViewId()
@@ -938,30 +942,13 @@ class MainActivity : AppCompatActivity() {
                     else -> "•"
                 }
 
-                val catFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#402979FF"))
-                    cornerRadius = 14f
-                    setStroke(2, Color.parseColor("#80FFFFFF"))
-                }
-                val catDefaultBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#4D151A22"))
-                    cornerRadius = 14f
-                }
-
-                row.background = catDefaultBg
-
                 row.setOnFocusChangeListener { _, hasFocus ->
-                    if (hasFocus) {
-                        row.background = catFocusedBg
-                        titleView.setTextColor(Color.WHITE)
-                        iconView.setTextColor(Color.WHITE)
-                        arrowView.setTextColor(Color.WHITE)
-                    } else {
-                        row.background = catDefaultBg
-                        titleView.setTextColor(Color.parseColor("#ECEFF1"))
-                        iconView.setTextColor(Color.parseColor("#90A4AE"))
-                        arrowView.setTextColor(Color.parseColor("#90A4AE"))
-                    }
+                    row.background = if (hasFocus) rowFocusedBg else rowDefaultBg
+                    val color = if (hasFocus) Color.WHITE else Color.parseColor("#ECEFF1")
+                    val subColor = if (hasFocus) Color.WHITE else Color.parseColor("#90A4AE")
+                    titleView.setTextColor(color)
+                    iconView.setTextColor(subColor)
+                    arrowView.setTextColor(subColor)
                 }
 
                 val selectAction = {
@@ -1018,41 +1005,24 @@ class MainActivity : AppCompatActivity() {
                     tvProg?.visibility = View.GONE
                 }
 
-                if (favoriteUrls.contains(ch.streamUrl)) {
-                    tvFavStar?.visibility = View.VISIBLE
-                } else {
-                    tvFavStar?.visibility = View.GONE
-                }
+                tvFavStar?.visibility = if (favoriteUrls.contains(ch.streamUrl)) View.VISIBLE else View.GONE
 
                 if (ch.logoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
-                    Glide.with(this@MainActivity).load(ch.logoUrl).into(imgLogo)
+                    Glide.with(this@MainActivity)
+                        .load(ch.logoUrl)
+                        .override(80, 80)
+                        .into(imgLogo)
                 } else {
                     imgLogo.visibility = View.GONE
                 }
 
-                val cardFocusedBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#402979FF"))
-                    cornerRadius = 14f
-                    setStroke(2, Color.parseColor("#80FFFFFF"))
-                }
-                val cardDefaultBg = GradientDrawable().apply {
-                    setColor(Color.parseColor("#4D151A22"))
-                    cornerRadius = 14f
-                }
-
-                row.background = cardDefaultBg
+                row.background = rowDefaultBg
 
                 row.setOnFocusChangeListener { _, hasFocus ->
-                    if (hasFocus) {
-                        row.background = cardFocusedBg
-                        tvNum.setTextColor(Color.WHITE)
-                        tvName.setTextColor(Color.WHITE)
-                    } else {
-                        row.background = cardDefaultBg
-                        tvNum.setTextColor(Color.parseColor("#B0BEC5"))
-                        tvName.setTextColor(Color.parseColor("#FFFFFF"))
-                    }
+                    row.background = if (hasFocus) rowFocusedBg else rowDefaultBg
+                    tvNum.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#B0BEC5"))
+                    tvName.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#FFFFFF"))
                 }
 
                 row.setOnClickListener {
