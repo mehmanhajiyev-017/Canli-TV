@@ -164,13 +164,13 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Окно настроек плейлиста и EPG -->
+    <!-- Окно настроек с раздельным вводом Playlist и EPG -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
-        android:layout_width="500dp"
+        android:layout_width="520dp"
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
-        android:background="#DD111622"
+        android:background="#E6101420"
         android:orientation="vertical"
         android:padding="24dp"
         android:visibility="gone"
@@ -179,66 +179,89 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Настройки плейлиста и EPG"
+            android:text="Управление источниками"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
+        <!-- Блок 1: Плейлист -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="M3U Плейлист URL:"
+            android:text="1. Плейлист (M3U URL):"
             android:textColor="#B0BEC5"
             android:textSize="13sp"
             android:layout_marginBottom="6dp" />
-
-        <EditText
-            android:id="@+id/etM3uUrl"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:hint="http://.../playlist.m3u"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:layout_marginBottom="14dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="EPG Телепрограмма URL (XMLTV / .gz):"
-            android:textColor="#B0BEC5"
-            android:textSize="13sp"
-            android:layout_marginBottom="6dp" />
-
-        <EditText
-            android:id="@+id/etEpgUrl"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:hint="Оставьте пустым для автоопределения"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:layout_marginBottom="20dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:layout_marginBottom="18dp">
+
+            <EditText
+                android:id="@+id/etM3uUrl"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:hint="Вставьте ссылку на M3U"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btnSaveM3u"
+                android:layout_width="wrap_content"
+                android:layout_height="46dp"
+                android:text="Загрузить M3U" />
+        </LinearLayout>
+
+        <!-- Блок 2: EPG телепрограмма -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="2. Телепрограмма (EPG XMLTV / .gz URL):"
+            android:textColor="#B0BEC5"
+            android:textSize="13sp"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <EditText
+                android:id="@+id/etEpgUrl"
+                android:layout_width="0dp"
+                android:layout_height="46dp"
+                android:layout_weight="1"
+                android:hint="Вставьте ссылку на EPG (XMLTV)"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btnSaveEpg"
+                android:layout_width="wrap_content"
+                android:layout_height="46dp"
+                android:text="Загрузить EPG" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:gravity="end">
             <Button
                 android:id="@+id/btnCloseSettings"
                 android:layout_width="wrap_content"
                 android:layout_height="42dp"
-                android:text="Закрыть"
-                android:layout_marginEnd="10dp" />
-            <Button
-                android:id="@+id/btnSaveUrl"
-                android:layout_width="wrap_content"
-                android:layout_height="42dp"
-                android:text="Сохранить" />
+                android:text="Закрыть" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Компактная панель статуса (строго в правом верхнем углу) -->
+    <!-- Компактная плашка статуса (справа вверху) -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
@@ -259,7 +282,7 @@
             android:id="@+id/tvSyncChannels"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Channels: Загрузка..."
+            android:text="Channels: -"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold"
@@ -278,7 +301,7 @@
             android:id="@+id/tvSyncPrograms"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Programs: -"
+            android:text="EPG: -"
             android:textColor="#B0BEC5"
             android:textSize="12sp" />
     </LinearLayout>
