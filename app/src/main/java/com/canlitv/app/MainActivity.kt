@@ -50,7 +50,7 @@ import java.util.zip.GZIPInputStream
 data class Channel(
     val number: Int,
     val name: String,
-    val logoUrl: String,
+    var logoUrl: String,
     val streamUrl: String,
     val category: String,
     val tvgId: String = ""
@@ -93,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     private val favoriteUrls = mutableSetOf<String>()
 
     private val currentProgramsMap = ConcurrentHashMap<String, String>()
+    private val epgLogosMap = ConcurrentHashMap<String, String>()
 
     private var currentPlayingIndex = -1
     private var previousPlayingIndex = -1
@@ -108,7 +109,10 @@ class MainActivity : AppCompatActivity() {
     private var hideSyncCardRunnable: Runnable? = null
     private var maxSyncTimeoutRunnable: Runnable? = null
 
-    // Yüklənmə vəziyyətlərinin izlənməsi
+    // 1 saatlıq dövri arxa fon yeniləmə mexanizmi
+    private var periodicSyncRunnable: Runnable? = null
+    private val SYNC_INTERVAL_MS = 60 * 60 * 1000L // Dəqiq 1 saat
+
     private var isM3uLoading = false
     private var isEpgLoading = false
 
@@ -397,6 +401,9 @@ class MainActivity : AppCompatActivity() {
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
             fetchEPGDirectly(savedEpg)
         }
+
+        // 1 saatlıq dövri arxa fon taymerinin işə salınması
+        startPeriodicSync()
     }
 
     override fun onPause() {
@@ -409,13 +416,43 @@ class MainActivity : AppCompatActivity() {
         player?.stop()
         player?.release()
         player = null
+        stopPeriodicSync()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         player?.release()
         player = null
+        stopPeriodicSync()
         handler.removeCallbacksAndMessages(null)
+    }
+
+    // 1 saatdan bir avtomatik arxa fon yenilənməsi
+    private fun startPeriodicSync() {
+        stopPeriodicSync()
+        val r = object : Runnable {
+            override fun run() {
+                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                val m3u = prefs.getString("M3U_URL", "") ?: ""
+                val epg = prefs.getString("EPG_URL", "") ?: ""
+
+                // Yayımı kəsmədən (autoPlay = false) arxa fonda yeniləyir
+                if (m3u.isNotEmpty()) {
+                    fetchM3U(m3u, autoPlay = false)
+                }
+                if (epg.isNotEmpty() && epg.startsWith("http")) {
+                    fetchEPGDirectly(epg)
+                }
+                handler.postDelayed(this, SYNC_INTERVAL_MS)
+            }
+        }
+        periodicSyncRunnable = r
+        handler.postDelayed(r, SYNC_INTERVAL_MS)
+    }
+
+    private fun stopPeriodicSync() {
+        periodicSyncRunnable?.let { handler.removeCallbacks(it) }
+        periodicSyncRunnable = null
     }
 
     private fun loadFavorites() {
@@ -503,29 +540,25 @@ class MainActivity : AppCompatActivity() {
         btnSaveM3u.requestFocus()
     }
 
-    // Status kartının göstərilməsi və ən çox 10 dəqiqə limitinin təyin edilməsi
     private fun showSyncCard() {
         syncStatusCard.visibility = View.VISIBLE
         hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
 
-        // Əgər ekranda uzun müddət qalarsa, 10 dəqiqədən sonra mütləq gizlənir
         maxSyncTimeoutRunnable?.let { handler.removeCallbacks(it) }
         val rTimeout = Runnable { syncStatusCard.visibility = View.GONE }
         maxSyncTimeoutRunnable = rTimeout
-        handler.postDelayed(rTimeout, 600000) // 10 dəqiqə = 600 000 ms
+        handler.postDelayed(rTimeout, 600000)
     }
 
-    // Yüklənmə tam bitdikdə 10 saniyə ərzində nəticəni göstərib sonra gizlədir
     private fun checkAndScheduleHideSyncCard() {
         if (!isM3uLoading && !isEpgLoading) {
             hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
             val r = Runnable { syncStatusCard.visibility = View.GONE }
             hideSyncCardRunnable = r
-            handler.postDelayed(r, 10000) // Rahat görmək üçün 10 saniyə
+            handler.postDelayed(r, 8000)
         }
     }
 
-    // Pleylistin yüklənməsi və canlı rəqəmsal artım
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         isM3uLoading = true
         runOnUiThread { 
@@ -590,6 +623,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 parseM3ULive(body)
+                applyEpgLogosToChannels()
                 isM3uLoading = false
 
                 val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
@@ -626,7 +660,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Pleylist oxunarkən canlı rəqəm artımı
     private fun parseM3ULive(content: String) {
         val lines = content.lines()
         var currentName = ""
@@ -688,7 +721,6 @@ class MainActivity : AppCompatActivity() {
                 )
                 counter++
 
-                // Hər 250 kanaldan bir ekranda canlı rəqəm artımını göstərir
                 if (counter % 250 == 0) {
                     val curChCount = counter
                     val curLogoCount = logosFoundCount
@@ -708,7 +740,32 @@ class MainActivity : AppCompatActivity() {
         categories.addAll(tempCategories)
     }
 
-    // Pleylistdən tam asılı olmayan EPG qəbulu və canlı rəqəmsal axın
+    private fun applyEpgLogosToChannels() {
+        if (epgLogosMap.isEmpty() || allChannels.isEmpty()) return
+        for (ch in allChannels) {
+            if (ch.logoUrl.isEmpty()) {
+                if (ch.tvgId.isNotEmpty()) {
+                    val l = epgLogosMap[ch.tvgId.lowercase(Locale.ROOT)]
+                    if (!l.isNullOrEmpty()) {
+                        ch.logoUrl = l
+                        continue
+                    }
+                }
+                val norm = normalizeName(ch.name)
+                val l2 = epgLogosMap[norm]
+                if (!l2.isNullOrEmpty()) {
+                    ch.logoUrl = l2
+                    continue
+                }
+                val l3 = epgLogosMap[ch.name.lowercase(Locale.ROOT)]
+                if (!l3.isNullOrEmpty()) {
+                    ch.logoUrl = l3
+                }
+            }
+        }
+    }
+
+    // Sürətli EPG Analizi: Loqoları ilk saniyələrdə çıxarır, arxa fonda proqramları tələsmədən sayır
     private fun fetchEPGDirectly(epgUrl: String) {
         isEpgLoading = true
         runOnUiThread {
@@ -776,6 +833,7 @@ class MainActivity : AppCompatActivity() {
                         val now = System.currentTimeMillis()
                         val channelIdToNames = HashMap<String, MutableList<String>>()
                         val livePrograms = HashMap<String, String>()
+                        val tempEpgLogos = HashMap<String, String>()
 
                         var eventType = parser.eventType
                         var currentChannelId = ""
@@ -784,6 +842,7 @@ class MainActivity : AppCompatActivity() {
                         var progChannel = ""
                         var isCurrentProg = false
                         var progTitle = ""
+                        var logosDispatched = false
 
                         while (eventType != XmlPullParser.END_DOCUMENT) {
                             when (eventType) {
@@ -804,7 +863,36 @@ class MainActivity : AppCompatActivity() {
                                                 }
                                             }
                                         }
+                                        "icon" -> {
+                                            if (inChannel && currentChannelId.isNotEmpty()) {
+                                                val iconSrc = parser.getAttributeValue(null, "src")?.trim() ?: ""
+                                                if (iconSrc.isNotEmpty() && iconSrc.startsWith("http")) {
+                                                    tempEpgLogos[currentChannelId.lowercase(Locale.ROOT)] = iconSrc
+                                                }
+                                            }
+                                        }
                                         "programme" -> {
+                                            // LOQOLARIN DƏRHAL EKRANA VERİLMƏSİ (Proqramların bitməsini gözləmir!)
+                                            if (!logosDispatched && tempEpgLogos.isNotEmpty()) {
+                                                logosDispatched = true
+                                                val finalLogos = HashMap<String, String>()
+                                                for ((chId, logoUrl) in tempEpgLogos) {
+                                                    finalLogos[chId] = logoUrl
+                                                    channelIdToNames[chId]?.forEach { name ->
+                                                        finalLogos[normalizeName(name)] = logoUrl
+                                                        finalLogos[name.lowercase(Locale.ROOT)] = logoUrl
+                                                    }
+                                                }
+                                                epgLogosMap.putAll(finalLogos)
+                                                applyEpgLogosToChannels()
+
+                                                val quickLogoCount = allChannels.count { it.logoUrl.isNotEmpty() }
+                                                runOnUiThread {
+                                                    tvSyncLogos.text = "Logotypes: $quickLogoCount"
+                                                    recyclerViewChannels.adapter?.notifyDataSetChanged()
+                                                }
+                                            }
+
                                             parsedCount++
                                             val startStr = parser.getAttributeValue(null, "start") ?: ""
                                             val stopStr = parser.getAttributeValue(null, "stop") ?: ""
@@ -812,15 +900,13 @@ class MainActivity : AppCompatActivity() {
                                             val startMs = parseXmlTvTime(startStr)
                                             val stopMs = parseXmlTvTime(stopStr)
 
-                                            // Yalnız canlı efirdə olan verilişi yadda saxlayır
                                             if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
                                                 inProgramme = true
                                                 isCurrentProg = true
                                                 progTitle = ""
                                             }
 
-                                            // Sağ paneldə EPG rəqəmlərinin canlı axışı (hər 1500 sətirdən bir yenilənir)
-                                            if (parsedCount % 1500 == 0) {
+                                            if (parsedCount % 2000 == 0) {
                                                 val currentLiveCount = parsedCount
                                                 runOnUiThread {
                                                     tvSyncPrograms.text = "Programs: $currentLiveCount"
@@ -853,6 +939,19 @@ class MainActivity : AppCompatActivity() {
                             eventType = parser.next()
                         }
 
+                        if (!logosDispatched && tempEpgLogos.isNotEmpty()) {
+                            val finalLogos = HashMap<String, String>()
+                            for ((chId, logoUrl) in tempEpgLogos) {
+                                finalLogos[chId] = logoUrl
+                                channelIdToNames[chId]?.forEach { name ->
+                                    finalLogos[normalizeName(name)] = logoUrl
+                                    finalLogos[name.lowercase(Locale.ROOT)] = logoUrl
+                                }
+                            }
+                            epgLogosMap.putAll(finalLogos)
+                            applyEpgLogosToChannels()
+                        }
+
                         val mappedPrograms = HashMap<String, String>()
                         for ((chId, title) in livePrograms) {
                             mappedPrograms[chId] = title
@@ -864,8 +963,11 @@ class MainActivity : AppCompatActivity() {
                         currentProgramsMap.clear()
                         currentProgramsMap.putAll(mappedPrograms)
 
+                        val finalLogosCount = allChannels.count { it.logoUrl.isNotEmpty() }
+
                         runOnUiThread {
                             tvSyncPrograms.text = "Programs: $parsedCount"
+                            tvSyncLogos.text = "Logotypes: $finalLogosCount"
                             recyclerViewChannels.adapter?.notifyDataSetChanged()
                             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
                                 showInfoBanner(allChannels[currentPlayingIndex])
@@ -1091,10 +1193,16 @@ class MainActivity : AppCompatActivity() {
 
                 tvFavStar?.visibility = if (favoriteUrls.contains(ch.streamUrl)) View.VISIBLE else View.GONE
 
-                if (ch.logoUrl.isNotEmpty()) {
+                val finalLogoUrl = ch.logoUrl.ifEmpty {
+                    if (ch.tvgId.isNotEmpty()) epgLogosMap[ch.tvgId.lowercase(Locale.ROOT)] ?: "" else ""
+                }.ifEmpty {
+                    epgLogosMap[normalizeName(ch.name)] ?: ""
+                }
+
+                if (finalLogoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
                     Glide.with(this@MainActivity)
-                        .load(ch.logoUrl)
+                        .load(finalLogoUrl)
                         .diskCacheStrategy(DiskCacheStrategy.ALL)
                         .override(90, 90)
                         .into(imgLogo)
