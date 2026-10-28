@@ -154,7 +154,6 @@
                 android:textSize="28sp"
                 android:textStyle="bold" />
 
-            <!-- Kanalın Loqosu -->
             <ImageView
                 android:id="@+id/imgBannerLogo"
                 android:layout_width="48dp"
@@ -223,7 +222,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Tənzimləmələr Paneli (Sol Aşağıda Bayraqlar ilə) -->
+    <!-- Tənzimləmələr Paneli (Aşağısında Kvadrat Bayraqlar ilə Dil Seçimi) -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -236,7 +235,7 @@
         android:visibility="gone">
 
         <LinearLayout
-            android:layout_width="550dp"
+            android:layout_width="560dp"
             android:layout_height="wrap_content"
             android:background="#161B26"
             android:elevation="12dp"
@@ -247,14 +246,14 @@
                 android:id="@+id/tvSettingsDialogTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
+                android:layout_marginBottom="18dp"
                 android:text="Управление источниками"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvM3uLabel"
+                android:id="@+id/tvLabelM3u"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="6dp"
@@ -299,7 +298,7 @@
             </LinearLayout>
 
             <TextView
-                android:id="@+id/tvEpgLabel"
+                android:id="@+id/tvLabelEpg"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -344,99 +343,139 @@
                     android:textSize="18sp" />
             </LinearLayout>
 
-            <!-- Alt zolaq: Sol aşağıda Bayraqlar, Sağda BAĞLA düyməsi -->
+            <!-- Dil Seçimi Bölməsi (Kvadrat Bayraqlar) -->
+            <TextView
+                android:id="@+id/tvLabelLanguage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="8dp"
+                android:text="Dil / Язык / Language:"
+                android:textColor="#B0BEC5"
+                android:textSize="13sp" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <!-- Sol Aşağıda Təkcə Bayraqlar -->
+                <!-- 🇦🇿 Kvadrat AZ -->
                 <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:id="@+id/btnFlagAz"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical">
 
-                    <!-- AZ Bayrağı -->
-                    <LinearLayout
-                        android:id="@+id/btnLangAz"
-                        android:layout_width="48dp"
-                        android:layout_height="42dp"
-                        android:layout_marginEnd="6dp"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🇦🇿"
+                        android:textSize="22sp" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🇦🇿"
-                            android:textSize="22sp" />
-                    </LinearLayout>
-
-                    <!-- RU Bayrağı -->
-                    <LinearLayout
-                        android:id="@+id/btnLangRu"
-                        android:layout_width="48dp"
-                        android:layout_height="42dp"
-                        android:layout_marginEnd="6dp"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🇷🇺"
-                            android:textSize="22sp" />
-                    </LinearLayout>
-
-                    <!-- EN Bayrağı -->
-                    <LinearLayout
-                        android:id="@+id/btnLangEn"
-                        android:layout_width="48dp"
-                        android:layout_height="42dp"
-                        android:layout_marginEnd="6dp"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🇬🇧"
-                            android:textSize="22sp" />
-                    </LinearLayout>
-
-                    <!-- DE Bayrağı -->
-                    <LinearLayout
-                        android:id="@+id/btnLangDe"
-                        android:layout_width="48dp"
-                        android:layout_height="42dp"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🇩🇪"
-                            android:textSize="22sp" />
-                    </LinearLayout>
-
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AZ"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <!-- Sağda BAĞLA düyməsi -->
+                <!-- 🇷🇺 Kvadrat RU -->
+                <LinearLayout
+                    android:id="@+id/btnFlagRu"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="14dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🇷🇺"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="RU"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 🇬🇧 Kvadrat EN -->
+                <LinearLayout
+                    android:id="@+id/btnFlagEn"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="14dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🇬🇧"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="EN"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 🇩🇪 Kvadrat DE -->
+                <LinearLayout
+                    android:id="@+id/btnFlagDe"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="14dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🇩🇪"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="DE"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <!-- Bağla Düyməsi -->
                 <Button
                     android:id="@+id/btnCloseSettings"
                     style="?android:attr/borderlessButtonStyle"
                     android:layout_width="wrap_content"
-                    android:layout_height="42dp"
-                    android:text="ЗАКРЫТЬ" />
-
+                    android:layout_height="46dp"
+                    android:text="ЗАКРЫТЬ"
+                    android:textStyle="bold" />
             </LinearLayout>
 
         </LinearLayout>
