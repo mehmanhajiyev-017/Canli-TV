@@ -1,9 +1,9 @@
-name: Build TV APK
+name: Canli TV APK Derle
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -25,10 +25,10 @@ jobs:
           gradle-version: '8.2'
 
       - name: APK Derle
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug -PautoVersionCode=${{ github.run_number }} --no-daemon
 
       - name: APK Yukle (Dinamik Versiya Adi ile)
         uses: actions/upload-artifact@v4
         with:
-          name: TV-v1.0.${{ github.run_number }}
+          name: CanliTV-v1.${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
