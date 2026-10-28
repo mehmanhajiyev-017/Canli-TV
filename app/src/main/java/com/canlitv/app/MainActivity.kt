@@ -66,6 +66,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var numPadPanel: View
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
+    private lateinit var languageDialogPanel: View
+
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
@@ -85,6 +87,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSyncChannels: TextView
     private lateinit var tvSyncLogos: TextView
     private lateinit var tvSyncPrograms: TextView
+
+    // Dil seçimi elementləri
+    private lateinit var btnLangAz: LinearLayout
+    private lateinit var btnLangRu: LinearLayout
+    private lateinit var btnLangEn: LinearLayout
+    private lateinit var btnLangDe: LinearLayout
+    private lateinit var tvLangTitle: TextView
 
     private val allChannels = mutableListOf<Channel>()
     private val displayedChannels = mutableListOf<Channel>()
@@ -109,12 +118,14 @@ class MainActivity : AppCompatActivity() {
     private var hideSyncCardRunnable: Runnable? = null
     private var maxSyncTimeoutRunnable: Runnable? = null
 
-    // 1 saatlıq dövri arxa fon yeniləmə mexanizmi
     private var periodicSyncRunnable: Runnable? = null
-    private val SYNC_INTERVAL_MS = 60 * 60 * 1000L // Dəqiq 1 saat
+    private val SYNC_INTERVAL_MS = 60 * 60 * 1000L
 
     private var isM3uLoading = false
     private var isEpgLoading = false
+
+    // Cari dil: "az", "ru", "en", "de"
+    private var currentLang = "az"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -137,6 +148,8 @@ class MainActivity : AppCompatActivity() {
         numPadPanel = findViewById(R.id.numPadPanel)
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
+        languageDialogPanel = findViewById(R.id.languageDialogPanel)
+
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveM3u = findViewById(R.id.btnSaveM3u)
@@ -157,6 +170,12 @@ class MainActivity : AppCompatActivity() {
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
 
+        btnLangAz = findViewById(R.id.btnLangAz)
+        btnLangRu = findViewById(R.id.btnLangRu)
+        btnLangEn = findViewById(R.id.btnLangEn)
+        btnLangDe = findViewById(R.id.btnLangDe)
+        tvLangTitle = findViewById(R.id.tvLangTitle)
+
         syncStatusCard.background = GradientDrawable().apply {
             setColor(Color.parseColor("#D9101522"))
             cornerRadius = 16f
@@ -172,6 +191,7 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
+        initLanguageSelection()
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -242,7 +262,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "Düzgün M3U URL daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getLocalizedText("toast_invalid_m3u"), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -252,7 +272,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getLocalizedText("toast_no_m3u"), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -264,7 +284,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchEPGDirectly(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "Düzgün EPG URL daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getLocalizedText("toast_invalid_epg"), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -274,12 +294,131 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchEPGDirectly(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getLocalizedText("toast_no_epg"), Toast.LENGTH_SHORT).show()
             }
         }
 
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
+        }
+
+        // Tətbiq açılan kimi dil seçilib-seçilmədiyini yoxlayırıq
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        val savedLang = prefs.getString("APP_LANG", "") ?: ""
+        if (savedLang.isEmpty()) {
+            showLanguageDialog()
+        } else {
+            currentLang = savedLang
+            selectedCategory = getAllCategoryName()
+        }
+    }
+
+    // Dil seçimi pəncərəsinin tənzimlənməsi
+    private fun initLanguageSelection() {
+        val langButtons = listOf(btnLangAz to "az", btnLangRu to "ru", btnLangEn to "en", btnLangDe to "de")
+
+        for ((btn, langCode) in langButtons) {
+            btn.background = rowDefaultBg
+            btn.setOnFocusChangeListener { _, hasFocus ->
+                btn.background = if (hasFocus) rowFocusedBg else rowDefaultBg
+            }
+            btn.setOnClickListener {
+                setAppLanguage(langCode)
+            }
+        }
+    }
+
+    private fun showLanguageDialog() {
+        languageDialogPanel.visibility = View.VISIBLE
+        btnLangAz.post { btnLangAz.requestFocus() }
+    }
+
+    private fun setAppLanguage(langCode: String) {
+        currentLang = langCode
+        getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            .edit()
+            .putString("APP_LANG", langCode)
+            .apply()
+
+        languageDialogPanel.visibility = View.GONE
+        selectedCategory = getAllCategoryName()
+
+        setupCategoryAdapter()
+        filterChannels(selectedCategory)
+
+        // Əgər M3U yoxdursa parametrləri aç, varsa yüklə
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        val savedM3u = prefs.getString("M3U_URL", "") ?: ""
+        if (savedM3u.isEmpty()) {
+            showSettingsDialog()
+        } else if (allChannels.isEmpty()) {
+            fetchM3U(savedM3u, autoPlay = true)
+        }
+    }
+
+    private fun getAllCategoryName(): String {
+        return when (currentLang) {
+            "az" -> "Hamısı"
+            "en" -> "All"
+            "de" -> "Alle"
+            else -> "Все"
+        }
+    }
+
+    private fun getFavoritesCategoryName(): String {
+        return when (currentLang) {
+            "az" -> "Seçilmişlər"
+            "en" -> "Favorites"
+            "de" -> "Favoriten"
+            else -> "Избранное"
+        }
+    }
+
+    private fun getLocalizedText(key: String): String {
+        return when (key) {
+            "exit_prompt" -> when (currentLang) {
+                "az" -> "Çıxış üçün bir daha basın"
+                "en" -> "Press back again to exit"
+                "de" -> "Erneut drücken zum Beenden"
+                else -> "Нажмите ещё раз для выхода"
+            }
+            "channel_not_found" -> when (currentLang) {
+                "az" -> "Kanal tapılmadı"
+                "en" -> "Channel not found"
+                "de" -> "Kanal nicht gefunden"
+                else -> "Канал не найден"
+            }
+            "toast_invalid_m3u" -> when (currentLang) {
+                "az" -> "Düzgün M3U URL daxil edin"
+                "en" -> "Enter valid M3U URL"
+                "de" -> "Gültige M3U-URL eingeben"
+                else -> "Введите правильный URL M3U"
+            }
+            "toast_no_m3u" -> when (currentLang) {
+                "az" -> "M3U linki daxil edilməyib"
+                "en" -> "No M3U URL provided"
+                "de" -> "Keine M3U-URL angegeben"
+                else -> "M3U ссылка не введена"
+            }
+            "toast_invalid_epg" -> when (currentLang) {
+                "az" -> "Düzgün EPG URL daxil edin"
+                "en" -> "Enter valid EPG URL"
+                "de" -> "Gültige EPG-URL eingeben"
+                else -> "Введите правильный URL EPG"
+            }
+            "toast_no_epg" -> when (currentLang) {
+                "az" -> "EPG linki daxil edilməyib"
+                "en" -> "No EPG URL provided"
+                "de" -> "Keine EPG-URL angegeben"
+                else -> "EPG ссылка не введена"
+            }
+            "error_stream" -> when (currentLang) {
+                "az" -> "Yayım xətası"
+                "en" -> "Playback error"
+                "de" -> "Wiedergabefehler"
+                else -> "Ошибка воспроизведения"
+            }
+            else -> ""
         }
     }
 
@@ -303,7 +442,7 @@ class MainActivity : AppCompatActivity() {
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, "Oxutma xətası", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, getLocalizedText("error_stream"), Toast.LENGTH_SHORT).show()
                     }
                 }
             })
@@ -391,18 +530,20 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedM3u = prefs.getString("M3U_URL", "") ?: ""
         val savedEpg = prefs.getString("EPG_URL", "") ?: ""
+        val savedLang = prefs.getString("APP_LANG", "") ?: ""
 
-        if (savedM3u.isNotEmpty()) {
-            fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
-        } else {
-            showSettingsDialog()
+        if (savedLang.isNotEmpty()) {
+            if (savedM3u.isNotEmpty()) {
+                fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
+            } else {
+                showSettingsDialog()
+            }
         }
 
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
             fetchEPGDirectly(savedEpg)
         }
 
-        // 1 saatlıq dövri arxa fon taymerinin işə salınması
         startPeriodicSync()
     }
 
@@ -427,7 +568,6 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
     }
 
-    // 1 saatdan bir avtomatik arxa fon yenilənməsi
     private fun startPeriodicSync() {
         stopPeriodicSync()
         val r = object : Runnable {
@@ -436,7 +576,6 @@ class MainActivity : AppCompatActivity() {
                 val m3u = prefs.getString("M3U_URL", "") ?: ""
                 val epg = prefs.getString("EPG_URL", "") ?: ""
 
-                // Yayımı kəsmədən (autoPlay = false) arxa fonda yeniləyir
                 if (m3u.isNotEmpty()) {
                     fetchM3U(m3u, autoPlay = false)
                 }
@@ -470,14 +609,12 @@ class MainActivity : AppCompatActivity() {
         val currentFocusPos = displayedChannels.indexOf(channel)
         if (favoriteUrls.contains(channel.streamUrl)) {
             favoriteUrls.remove(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} silindi", Toast.LENGTH_SHORT).show()
         } else {
             favoriteUrls.add(channel.streamUrl)
-            Toast.makeText(applicationContext, "${channel.name} əlavə olundu", Toast.LENGTH_SHORT).show()
         }
         saveFavorites()
-        if (selectedCategory == "Избранное") {
-            filterChannels("Избранное")
+        if (selectedCategory == getFavoritesCategoryName()) {
+            filterChannels(getFavoritesCategoryName())
         } else if (currentFocusPos != -1) {
             recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
         }
@@ -588,7 +725,6 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     tvSyncChannels.text = "Channels: Xəta"
                     if (allChannels.isEmpty()) {
-                        Toast.makeText(applicationContext, "Pleylisti yükləmək mümkün olmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                     checkAndScheduleHideSyncCard()
@@ -601,7 +737,6 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         tvSyncChannels.text = "Channels: Xəta ${response.code}"
                         if (allChannels.isEmpty()) {
-                            Toast.makeText(applicationContext, "Server xətası: ${response.code}", Toast.LENGTH_LONG).show()
                             showSettingsDialog()
                         }
                         checkAndScheduleHideSyncCard()
@@ -636,7 +771,8 @@ class MainActivity : AppCompatActivity() {
 
                 runOnUiThread {
                     setupCategoryAdapter()
-                    val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
+                    val allCatName = getAllCategoryName()
+                    val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else allCatName
                     filterChannels(catToSelect)
 
                     if (allChannels.isNotEmpty()) {
@@ -652,7 +788,6 @@ class MainActivity : AppCompatActivity() {
                             currentPlayingIndex = resumeIndex
                         }
                     } else {
-                        Toast.makeText(applicationContext, "Kanallar tapılmadı", Toast.LENGTH_LONG).show()
                         showSettingsDialog()
                     }
                 }
@@ -671,8 +806,8 @@ class MainActivity : AppCompatActivity() {
 
         val tempChannels = mutableListOf<Channel>()
         val tempCategories = LinkedHashSet<String>()
-        tempCategories.add("Все")
-        tempCategories.add("Избранное")
+        tempCategories.add(getAllCategoryName())
+        tempCategories.add(getFavoritesCategoryName())
 
         val groupRegex = Regex("""group-title\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
         val logoRegex = Regex("""(?:tvg-logo|logo)\s*=\s*["']?([^"',\s\r\n]+)["']?""", RegexOption.IGNORE_CASE)
@@ -706,8 +841,8 @@ class MainActivity : AppCompatActivity() {
                     tempCategories.add(currentGroup)
                 }
             } else if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
-                val name = if (currentName.isNotEmpty()) currentName else "Канал $counter"
-                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Другие"
+                val name = if (currentName.isNotEmpty()) currentName else "Channel $counter"
+                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Other"
                 tempCategories.add(cat)
                 tempChannels.add(
                     Channel(
@@ -765,7 +900,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Sürətli EPG Analizi: Loqoları ilk saniyələrdə çıxarır, arxa fonda proqramları tələsmədən sayır
     private fun fetchEPGDirectly(epgUrl: String) {
         isEpgLoading = true
         runOnUiThread {
@@ -872,7 +1006,6 @@ class MainActivity : AppCompatActivity() {
                                             }
                                         }
                                         "programme" -> {
-                                            // LOQOLARIN DƏRHAL EKRANA VERİLMƏSİ (Proqramların bitməsini gözləmir!)
                                             if (!logosDispatched && tempEpgLogos.isNotEmpty()) {
                                                 logosDispatched = true
                                                 val finalLogos = HashMap<String, String>()
@@ -1029,9 +1162,12 @@ class MainActivity : AppCompatActivity() {
     private fun filterChannels(category: String) {
         selectedCategory = category
         displayedChannels.clear()
+        val allCatName = getAllCategoryName()
+        val favCatName = getFavoritesCategoryName()
+
         when (category) {
-            "Все" -> displayedChannels.addAll(allChannels)
-            "Избранное" -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
+            allCatName -> displayedChannels.addAll(allChannels)
+            favCatName -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
             else -> displayedChannels.addAll(allChannels.filter { it.category == category })
         }
         setupChannelAdapter()
@@ -1040,6 +1176,9 @@ class MainActivity : AppCompatActivity() {
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
         categoryPanel.visibility = View.GONE
+        val allCatName = getAllCategoryName()
+        val favCatName = getFavoritesCategoryName()
+
         if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
             filterChannels(selectedCategory)
             recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
@@ -1047,11 +1186,11 @@ class MainActivity : AppCompatActivity() {
         }
         val currentChannel = allChannels[currentPlayingIndex]
         val inCurrentCat = when (selectedCategory) {
-            "Все" -> true
-            "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
+            allCatName -> true
+            favCatName -> favoriteUrls.contains(currentChannel.streamUrl)
             else -> currentChannel.category == selectedCategory
         }
-        if (!inCurrentCat) selectedCategory = "Все"
+        if (!inCurrentCat) selectedCategory = allCatName
         filterChannels(selectedCategory)
         focusCurrentChannelCentered()
     }
@@ -1119,9 +1258,12 @@ class MainActivity : AppCompatActivity() {
                 val arrowView = row.getChildAt(2) as TextView
 
                 titleView.text = cat
+                val allCatName = getAllCategoryName()
+                val favCatName = getFavoritesCategoryName()
+
                 iconView.text = when (cat) {
-                    "Все" -> "☰"
-                    "Избранное" -> "★"
+                    allCatName -> "☰"
+                    favCatName -> "★"
                     else -> "•"
                 }
 
@@ -1310,10 +1452,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (languageDialogPanel.visibility == View.VISIBLE) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                // Əgər dil artıq seçilibsə dialoqu bağlaya bilər
+                val savedLang = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE).getString("APP_LANG", "") ?: ""
+                if (savedLang.isNotEmpty()) {
+                    languageDialogPanel.visibility = View.GONE
+                }
+                return true
+            }
+            return super.onKeyDown(keyCode, event)
+        }
+
         if (linkDialogPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
             return super.onKeyDown(keyCode, event)
         }
+
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -1385,7 +1540,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 this.doubleBackToExitPressedOnce = true
-                Toast.makeText(this, "Çıxış üçün bir daha basın", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getLocalizedText("exit_prompt"), Toast.LENGTH_SHORT).show()
                 handler.postDelayed({ doubleBackToExitPressedOnce = false }, 2500)
                 return true
             }
@@ -1442,7 +1597,7 @@ class MainActivity : AppCompatActivity() {
                 playChannelByIndex(foundIndex)
                 numPadPanel.visibility = View.GONE
             } else {
-                Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, getLocalizedText("channel_not_found"), Toast.LENGTH_SHORT).show()
                 tvNumpadDisplay.text = "---"
             }
         }
