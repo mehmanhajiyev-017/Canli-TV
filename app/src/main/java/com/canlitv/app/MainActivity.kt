@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerViewCategories: RecyclerView
     private lateinit var tvNumpadDisplay: TextView
     private lateinit var tvBannerNumber: TextView
+    private lateinit var imgBannerLogo: ImageView
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
 
@@ -88,7 +89,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvSyncLogos: TextView
     private lateinit var tvSyncPrograms: TextView
 
-    // Dil seçimi elementləri
     private lateinit var btnLangAz: LinearLayout
     private lateinit var btnLangRu: LinearLayout
     private lateinit var btnLangEn: LinearLayout
@@ -124,7 +124,6 @@ class MainActivity : AppCompatActivity() {
     private var isM3uLoading = false
     private var isEpgLoading = false
 
-    // Cari dil: "az", "ru", "en", "de"
     private var currentLang = "az"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -162,6 +161,7 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
         tvNumpadDisplay = findViewById(R.id.tvNumpadDisplay)
         tvBannerNumber = findViewById(R.id.tvBannerNumber)
+        imgBannerLogo = findViewById(R.id.imgBannerLogo)
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
@@ -302,7 +302,6 @@ class MainActivity : AppCompatActivity() {
             linkDialogPanel.visibility = View.GONE
         }
 
-        // Tətbiq açılan kimi dil seçilib-seçilmədiyini yoxlayırıq
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedLang = prefs.getString("APP_LANG", "") ?: ""
         if (savedLang.isEmpty()) {
@@ -313,7 +312,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Dil seçimi pəncərəsinin tənzimlənməsi
     private fun initLanguageSelection() {
         val langButtons = listOf(btnLangAz to "az", btnLangRu to "ru", btnLangEn to "en", btnLangDe to "de")
 
@@ -346,7 +344,6 @@ class MainActivity : AppCompatActivity() {
         setupCategoryAdapter()
         filterChannels(selectedCategory)
 
-        // Əgər M3U yoxdursa parametrləri aç, varsa yüklə
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedM3u = prefs.getString("M3U_URL", "") ?: ""
         if (savedM3u.isEmpty()) {
@@ -1437,11 +1434,27 @@ class MainActivity : AppCompatActivity() {
 
         tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav$progText"
 
+        val finalLogoUrl = channel.logoUrl.ifEmpty {
+            if (channel.tvgId.isNotEmpty()) epgLogosMap[channel.tvgId.lowercase(Locale.ROOT)] ?: "" else ""
+        }.ifEmpty {
+            epgLogosMap[normalizeName(channel.name)] ?: ""
+        }
+
+        if (finalLogoUrl.isNotEmpty()) {
+            imgBannerLogo.visibility = View.VISIBLE
+            Glide.with(this)
+                .load(finalLogoUrl)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .into(imgBannerLogo)
+        } else {
+            imgBannerLogo.visibility = View.GONE
+        }
+
         infoBanner.visibility = View.VISIBLE
         bannerRunnable?.let { handler.removeCallbacks(it) }
         val r = Runnable { infoBanner.visibility = View.GONE }
         bannerRunnable = r
-        handler.postDelayed(r, 4000)
+        handler.postDelayed(r, 4500)
     }
 
     private fun exitApplicationCompletely() {
@@ -1454,7 +1467,6 @@ class MainActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (languageDialogPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
-                // Əgər dil artıq seçilibsə dialoqu bağlaya bilər
                 val savedLang = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE).getString("APP_LANG", "") ?: ""
                 if (savedLang.isNotEmpty()) {
                     languageDialogPanel.visibility = View.GONE
