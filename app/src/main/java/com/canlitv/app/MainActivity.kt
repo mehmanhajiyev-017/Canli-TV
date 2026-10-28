@@ -16,7 +16,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -70,10 +69,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
 
-    // XML-dən asılı olmadan tam kod daxilində qurulan Dil Paneli
-    private var languageDialogPanel: LinearLayout? = null
-    private var firstLangBtn: View? = null
-
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
@@ -89,6 +84,19 @@ class MainActivity : AppCompatActivity() {
     private var imgBannerLogo: ImageView? = null
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
+
+    private lateinit var tvSettingsDialogTitle: TextView
+    private lateinit var tvLabelM3u: TextView
+    private lateinit var tvLabelEpg: TextView
+    private lateinit var tvLabelLanguage: TextView
+    private lateinit var tvSettingsBtnText: TextView
+    private lateinit var tvCategoriesTitle: TextView
+
+    // Kvadrat bayraq düymələri
+    private lateinit var btnFlagAz: LinearLayout
+    private lateinit var btnFlagRu: LinearLayout
+    private lateinit var btnFlagEn: LinearLayout
+    private lateinit var btnFlagDe: LinearLayout
 
     private lateinit var syncStatusCard: View
     private lateinit var tvSyncChannels: TextView
@@ -107,7 +115,7 @@ class MainActivity : AppCompatActivity() {
     private var currentPlayingIndex = -1
     private var previousPlayingIndex = -1
 
-    // 5 dəfə geri basıldıqda proqramın tam bağlanması
+    // 5 dəfə geri basıldıqda tam çıxış
     private var backPressCount = 0
     private var resetBackPressRunnable: Runnable? = null
 
@@ -167,6 +175,18 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
+        tvSettingsDialogTitle = findViewById(R.id.tvSettingsDialogTitle)
+        tvLabelM3u = findViewById(R.id.tvLabelM3u)
+        tvLabelEpg = findViewById(R.id.tvLabelEpg)
+        tvLabelLanguage = findViewById(R.id.tvLabelLanguage)
+        tvSettingsBtnText = findViewById(R.id.tvSettingsBtnText)
+        tvCategoriesTitle = findViewById(R.id.tvCategoriesTitle)
+
+        btnFlagAz = findViewById(R.id.btnFlagAz)
+        btnFlagRu = findViewById(R.id.btnFlagRu)
+        btnFlagEn = findViewById(R.id.btnFlagEn)
+        btnFlagDe = findViewById(R.id.btnFlagDe)
+
         syncStatusCard = findViewById(R.id.syncStatusCard)
         tvSyncChannels = findViewById(R.id.tvSyncChannels)
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
@@ -187,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
-        buildLanguageDialogProgrammatically()
+        initFlagButtons()
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -298,115 +318,59 @@ class MainActivity : AppCompatActivity() {
             linkDialogPanel.visibility = View.GONE
         }
 
-        // Dil yoxlanışı
+        // Saxlanılmış dili yükləyirik (susmaya görə "az")
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        val savedLang = prefs.getString("APP_LANG", "") ?: ""
-        if (savedLang.isEmpty()) {
-            showLanguageDialog()
-        } else {
-            currentLang = savedLang
-            selectedCategory = getAllCategoryName()
-        }
+        currentLang = prefs.getString("APP_LANG", "az") ?: "az"
+        selectedCategory = getAllCategoryName()
+        applyLanguageToUI()
     }
 
-    // Dil seçimi pəncərəsini birbaşa kod ilə yaradırıq (XML xətalarını birdəfəlik yox edir)
-    private fun buildLanguageDialogProgrammatically() {
-        val root = findViewById<FrameLayout>(android.R.id.content) ?: return
-        val density = resources.displayMetrics.density
-
-        val overlay = LinearLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.parseColor("#D9000000"))
-            gravity = Gravity.CENTER
-            orientation = LinearLayout.VERTICAL
-            isClickable = true
-            isFocusable = true
-            visibility = View.GONE
-        }
-
-        val card = LinearLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams((520 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#161B26"))
-                cornerRadius = 18 * density
-                setStroke((2 * density).toInt(), Color.parseColor("#33FFFFFF"))
-            }
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            val p = (26 * density).toInt()
-            setPadding(p, p, p, p)
-        }
-
-        val title = TextView(this).apply {
-            text = "Dil seçin / Select Language"
-            setTextColor(Color.WHITE)
-            textSize = 20f
-            typeface = Typeface.DEFAULT_BOLD
-            val mb = (22 * density).toInt()
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = mb
-            }
-        }
-        card.addView(title)
-
-        val langs = listOf(
-            Triple("🇦🇿", "Azərbaycan dili (AZ)", "az"),
-            Triple("🇷🇺", "Русский язык (RU)", "ru"),
-            Triple("🇬🇧", "English (EN)", "en"),
-            Triple("🇩🇪", "Deutsch (DE)", "de")
+    private fun initFlagButtons() {
+        val flags = listOf(
+            btnFlagAz to "az",
+            btnFlagRu to "ru",
+            btnFlagEn to "en",
+            btnFlagDe to "de"
         )
 
-        for ((index, item) in langs.withIndex()) {
-            val (flag, name, code) = item
-            val btn = LinearLayout(this).apply {
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (52 * density).toInt()).apply {
-                    if (index < langs.size - 1) bottomMargin = (10 * density).toInt()
-                }
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                val px = (20 * density).toInt()
-                setPadding(px, 0, px, 0)
-                isClickable = true
-                isFocusable = true
-                background = rowDefaultBg
-
-                setOnFocusChangeListener { _, hasFocus ->
-                    background = if (hasFocus) rowFocusedBg else rowDefaultBg
-                }
-                setOnClickListener {
-                    setAppLanguage(code)
-                }
+        for ((btn, code) in flags) {
+            btn.setOnFocusChangeListener { _, hasFocus ->
+                updateFlagBackground(btn, code, hasFocus)
             }
-
-            val tvFlag = TextView(this).apply {
-                text = flag
-                textSize = 24f
+            btn.setOnClickListener {
+                setAppLanguage(code)
             }
-            val tvName = TextView(this).apply {
-                text = name
-                setTextColor(Color.parseColor("#ECEFF1"))
-                textSize = 16f
-                typeface = Typeface.DEFAULT_BOLD
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = (16 * density).toInt()
-                }
-            }
-
-            btn.addView(tvFlag)
-            btn.addView(tvName)
-            card.addView(btn)
-
-            if (index == 0) firstLangBtn = btn
         }
-
-        overlay.addView(card)
-        root.addView(overlay)
-        languageDialogPanel = overlay
+        updateAllFlagsBackground()
     }
 
-    private fun showLanguageDialog() {
-        languageDialogPanel?.visibility = View.VISIBLE
-        firstLangBtn?.post { firstLangBtn?.requestFocus() }
+    private fun updateFlagBackground(btn: LinearLayout, code: String, isFocused: Boolean) {
+        val isSelected = (currentLang == code)
+        val bg = GradientDrawable().apply {
+            cornerRadius = 12f
+            when {
+                isFocused -> {
+                    setColor(Color.parseColor("#402979FF"))
+                    setStroke(3, Color.parseColor("#FFFFFF"))
+                }
+                isSelected -> {
+                    setColor(Color.parseColor("#2979FF"))
+                    setStroke(2, Color.parseColor("#80FFFFFF"))
+                }
+                else -> {
+                    setColor(Color.parseColor("#1F2736"))
+                    setStroke(2, Color.parseColor("#33FFFFFF"))
+                }
+            }
+        }
+        btn.background = bg
+    }
+
+    private fun updateAllFlagsBackground() {
+        updateFlagBackground(btnFlagAz, "az", btnFlagAz.hasFocus())
+        updateFlagBackground(btnFlagRu, "ru", btnFlagRu.hasFocus())
+        updateFlagBackground(btnFlagEn, "en", btnFlagEn.hasFocus())
+        updateFlagBackground(btnFlagDe, "de", btnFlagDe.hasFocus())
     }
 
     private fun setAppLanguage(langCode: String) {
@@ -416,18 +380,56 @@ class MainActivity : AppCompatActivity() {
             .putString("APP_LANG", langCode)
             .apply()
 
-        languageDialogPanel?.visibility = View.GONE
-        selectedCategory = getAllCategoryName()
+        updateAllFlagsBackground()
+        applyLanguageToUI()
 
+        selectedCategory = getAllCategoryName()
         setupCategoryAdapter()
         filterChannels(selectedCategory)
+    }
 
-        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        val savedM3u = prefs.getString("M3U_URL", "") ?: ""
-        if (savedM3u.isEmpty()) {
-            showSettingsDialog()
-        } else if (allChannels.isEmpty()) {
-            fetchM3U(savedM3u, autoPlay = true)
+    private fun applyLanguageToUI() {
+        tvCategoriesTitle.text = when (currentLang) {
+            "az" -> "Kateqoriyalar"
+            "en" -> "Categories"
+            "de" -> "Kategorien"
+            else -> "Категории"
+        }
+        tvSettingsBtnText.text = when (currentLang) {
+            "az" -> "Tənzimləmələr"
+            "en" -> "Settings"
+            "de" -> "Einstellungen"
+            else -> "Настройки"
+        }
+        tvSettingsDialogTitle.text = when (currentLang) {
+            "az" -> "Mənbələrin idarə edilməsi"
+            "en" -> "Source Management"
+            "de" -> "Quellenverwaltung"
+            else -> "Управление источниками"
+        }
+        tvLabelM3u.text = when (currentLang) {
+            "az" -> "1. Pleylist (M3U URL):"
+            "en" -> "1. Playlist (M3U URL):"
+            "de" -> "1. Wiedergabeliste (M3U URL):"
+            else -> "1. Плейлист (M3U URL):"
+        }
+        tvLabelEpg.text = when (currentLang) {
+            "az" -> "2. Proqram bələdçisi (EPG XMLTV / .gz URL):"
+            "en" -> "2. TV Guide (EPG XMLTV / .gz URL):"
+            "de" -> "2. TV-Programm (EPG XMLTV / .gz URL):"
+            else -> "2. Телепрограмма (EPG XMLTV / .gz URL):"
+        }
+        tvLabelLanguage.text = when (currentLang) {
+            "az" -> "Dil seçimi:"
+            "en" -> "Select Language:"
+            "de" -> "Sprache wählen:"
+            else -> "Выбор языка:"
+        }
+        btnCloseSettings.text = when (currentLang) {
+            "az" -> "BAĞLA"
+            "en" -> "CLOSE"
+            "de" -> "SCHLIESSEN"
+            else -> "ЗАКРЫТЬ"
         }
     }
 
@@ -605,14 +607,11 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         val savedM3u = prefs.getString("M3U_URL", "") ?: ""
         val savedEpg = prefs.getString("EPG_URL", "") ?: ""
-        val savedLang = prefs.getString("APP_LANG", "") ?: ""
 
-        if (savedLang.isNotEmpty()) {
-            if (savedM3u.isNotEmpty()) {
-                fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
-            } else {
-                showSettingsDialog()
-            }
+        if (savedM3u.isNotEmpty()) {
+            fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
+        } else {
+            showSettingsDialog()
         }
 
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
@@ -748,6 +747,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
+        updateAllFlagsBackground()
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveM3u.requestFocus()
     }
@@ -1545,17 +1545,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (languageDialogPanel?.visibility == View.VISIBLE) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) {
-                val savedLang = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE).getString("APP_LANG", "") ?: ""
-                if (savedLang.isNotEmpty()) {
-                    languageDialogPanel?.visibility = View.GONE
-                }
-                return true
-            }
-            return super.onKeyDown(keyCode, event)
-        }
-
         if (linkDialogPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
             return super.onKeyDown(keyCode, event)
