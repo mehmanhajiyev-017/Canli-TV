@@ -1,149 +1,497 @@
-    <!-- Dil Seçimi Paneli (Açılan kimi və ya tənzimləmələrdən) -->
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:keepScreenOn="true">
+
+    <!-- Video Pleyer -->
+    <com.google.android.exoplayer2.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="false"
+        app:resize_mode="fit" />
+
+    <!-- Sağ Yuxarı Sinxronizasiya Kartı -->
+    <LinearLayout
+        android:id="@+id/syncStatusCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="24dp"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvSyncChannels"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Channels: 0"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvSyncLogos"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text="Logotypes: 0"
+            android:textColor="#B0BEC5"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tvSyncPrograms"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:text="Programs: 0"
+            android:textColor="#B0BEC5"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Sol Kateqoriyalar Paneli -->
+    <LinearLayout
+        android:id="@+id/categoryPanel"
+        android:layout_width="290dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="#E60B0E14"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvCategoriesTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="Категории"
+            android:textColor="#ECEFF1"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewCategories"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:id="@+id/btnOpenSettings"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚙"
+                android:textColor="#B0BEC5"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/tvSettingsBtnText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="Настройки"
+                android:textColor="#ECEFF1"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Kanallar Paneli -->
+    <LinearLayout
+        android:id="@+id/channelPanel"
+        android:layout_width="390dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="#EB0B0E14"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewChannels"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </LinearLayout>
+
+    <!-- Aşağı Məlumat Banneri -->
+    <LinearLayout
+        android:id="@+id/infoBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="24dp"
+        android:background="#EA0B0E14"
+        android:orientation="vertical"
+        android:padding="18dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvBannerNumber"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:textColor="#2979FF"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvBannerName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFF"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvBannerCategory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="#B0BEC5"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- Sağ Numpad Paneli -->
+    <LinearLayout
+        android:id="@+id/numPadPanel"
+        android:layout_width="210dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="24dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvNumpadDisplay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="---"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <GridLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:columnCount="3">
+
+            <Button android:id="@+id/btn1" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="1" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn2" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="2" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn3" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="3" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn4" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="4" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn5" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="5" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn6" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="6" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn7" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="7" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn8" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="8" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn9" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="9" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btnClear" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="C" android:textColor="#FF5252" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btn0" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="0" android:textSize="18sp" android:textStyle="bold" />
+            <Button android:id="@+id/btnGo" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="52dp" android:layout_margin="3dp" android:text="OK" android:textColor="#4CAF50" android:textSize="16sp" android:textStyle="bold" />
+        </GridLayout>
+    </LinearLayout>
+
+    <!-- Tənzimləmələr Paneli -->
+    <LinearLayout
+        android:id="@+id/linkDialogPanel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#D9000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="540dp"
+            android:layout_height="wrap_content"
+            android:background="#161B26"
+            android:elevation="12dp"
+            android:orientation="vertical"
+            android:padding="26dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:text="Управление источниками"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="1. Плейлист (M3U URL):"
+                android:textColor="#B0BEC5"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etM3uUrl"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:hint="Вставьте M3U ссылку"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:singleLine="true"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnSaveM3u"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:text="OK"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnRefreshM3u"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:text="↻"
+                    android:textSize="18sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="6dp"
+                android:text="2. Телепрограмма (EPG XMLTV / .gz URL):"
+                android:textColor="#B0BEC5"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etEpgUrl"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:hint="Вставьте EPG ссылку (.xml / .gz)"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:singleLine="true"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnSaveEpg"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:text="OK"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnRefreshEpg"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:text="↻"
+                    android:textSize="18sp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnCloseSettings"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:layout_gravity="end"
+                android:layout_marginTop="20dp"
+                android:text="ЗАКРЫТЬ" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Dil Seçimi Paneli -->
     <LinearLayout
         android:id="@+id/languageDialogPanel"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#D9000000"
+        android:clickable="true"
+        android:focusable="true"
         android:gravity="center"
         android:orientation="vertical"
-        android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true">
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="520dp"
             android:layout_height="wrap_content"
             android:background="#161B26"
-            android:padding="26dp"
-            android:orientation="vertical"
+            android:elevation="12dp"
             android:gravity="center_horizontal"
-            android:elevation="12dp">
+            android:orientation="vertical"
+            android:padding="26dp">
 
             <TextView
                 android:id="@+id/tvLangTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Dil seçin / Выберите язык"
+                android:layout_marginBottom="24dp"
+                android:text="Dil seçin / Select Language"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="24dp" />
+                android:textStyle="bold" />
 
-            <!-- Bayraqlar və Dillər Siyahısı -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Azərbaycan dili -->
                 <LinearLayout
                     android:id="@+id/btnLangAz"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
                     android:layout_marginBottom="10dp"
+                    android:clickable="true"
                     android:focusable="true"
-                    android:clickable="true">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="20dp">
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🇦🇿"
                         android:textSize="24sp" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
                         android:text="Azərbaycan dili (AZ)"
                         android:textColor="#ECEFF1"
                         android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:layout_marginStart="16dp" />
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <!-- Rus dili -->
                 <LinearLayout
                     android:id="@+id/btnLangRu"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
                     android:layout_marginBottom="10dp"
+                    android:clickable="true"
                     android:focusable="true"
-                    android:clickable="true">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="20dp">
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🇷🇺"
                         android:textSize="24sp" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
                         android:text="Русский язык (RU)"
                         android:textColor="#ECEFF1"
                         android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:layout_marginStart="16dp" />
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <!-- İngilis dili -->
                 <LinearLayout
                     android:id="@+id/btnLangEn"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
                     android:layout_marginBottom="10dp"
+                    android:clickable="true"
                     android:focusable="true"
-                    android:clickable="true">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="20dp">
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🇬🇧"
                         android:textSize="24sp" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
                         android:text="English (EN)"
                         android:textColor="#ECEFF1"
                         android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:layout_marginStart="16dp" />
+                        android:textStyle="bold" />
                 </LinearLayout>
 
-                <!-- Alman dili -->
                 <LinearLayout
                     android:id="@+id/btnLangDe"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingStart="20dp"
-                    android:paddingEnd="20dp"
                     android:layout_marginBottom="6dp"
+                    android:clickable="true"
                     android:focusable="true"
-                    android:clickable="true">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="20dp"
+                    android:paddingEnd="20dp">
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🇩🇪"
                         android:textSize="24sp" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
                         android:text="Deutsch (DE)"
                         android:textColor="#ECEFF1"
                         android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:layout_marginStart="16dp" />
+                        android:textStyle="bold" />
                 </LinearLayout>
-
             </LinearLayout>
-
         </LinearLayout>
     </LinearLayout>
+
+</FrameLayout>
