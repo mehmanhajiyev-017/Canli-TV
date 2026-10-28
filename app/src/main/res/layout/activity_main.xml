@@ -127,7 +127,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Aşağı Məlumat Banneri -->
+    <!-- Aşağı Məlumat Banneri (Kanalın Nömrəsi, Loqosu və Adı) -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -149,10 +149,19 @@
                 android:id="@+id/tvBannerNumber"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
+                android:layout_marginEnd="14dp"
                 android:textColor="#2979FF"
-                android:textSize="26sp"
+                android:textSize="28sp"
                 android:textStyle="bold" />
+
+            <!-- Kanalın Loqotipi -->
+            <ImageView
+                android:id="@+id/imgBannerLogo"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="16dp"
+                android:scaleType="fitCenter"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvBannerName"
@@ -343,7 +352,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Dil Seçimi Paneli -->
+    <!-- Dil Seçimi Paneli (Bayraqlar ilə) -->
     <LinearLayout
         android:id="@+id/languageDialogPanel"
         android:layout_width="match_parent"
