@@ -14,8 +14,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/tv_banner"
-        android:banner="@drawable/tv_banner"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@mipmap/ic_launcher"
         android:label="Canli TV"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:usesCleartextTraffic="true">
