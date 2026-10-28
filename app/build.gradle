@@ -3,6 +3,10 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// GitHub Actions-dan gələn nömrə ilə versionCode və versionName avtomatik artır
+def autoVersionCode = project.hasProperty('autoVersionCode') ? project.property('autoVersionCode').toInteger() : 1
+def autoVersionName = "1." + autoVersionCode
+
 android {
     namespace 'com.canlitv.app'
     compileSdk 34
@@ -11,17 +15,14 @@ android {
         applicationId "com.canlitv.app"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        
+        versionCode autoVersionCode
+        versionName autoVersionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        debug {
-            minifyEnabled false
-            debuggable true
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -42,12 +43,12 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
 
-    // ExoPlayer 2
-    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
-    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
-    implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+    // ExoPlayer video axını üçün
+    implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
 
-    // Şəbəkə və Şəkillər
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // Şəkillər və loqolar üçün Glide
     implementation 'com.github.bumptech.glide:glide:4.16.0'
+
+    // Şəbəkə sorğuları üçün OkHttp
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
