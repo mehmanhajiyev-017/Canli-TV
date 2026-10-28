@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+
+    <!-- Göy dairəvi əsas fon -->
+    <path
+        android:fillColor="#0D2B45"
+        android:pathData="M96,96m-92,0a92,92 0,1 1,184 0a92,92 0,1 1,-184 0" />
+
+    <!-- Dairənin parlaq göy kənar xətti -->
+    <path
+        android:strokeColor="#52B6FF"
+        android:strokeWidth="6"
+        android:pathData="M96,96m-86,0a86,86 0,1 1,172 0a86,86 0,1 1,-172 0" />
+
+    <!-- Loqodakı göy daxili kvadrat çərçivə -->
+    <path
+        android:strokeColor="#52B6FF"
+        android:strokeWidth="6"
+        android:pathData="M52,52 L140,52 L140,140 L52,140 Z" />
+
+    <!-- Ortadakı Play (Oynatma) üçbucağı -->
+    <path
+        android:fillColor="#52B6FF"
+        android:strokeColor="#52B6FF"
+        android:strokeWidth="4"
+        android:strokeLineJoin="round"
+        android:pathData="M78,66 L130,96 L78,126 Z" />
+</vector>
