@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Темный фон баннера -->
+    <path
+        android:fillColor="#111622"
+        android:pathData="M0,0h320v180h-320z" />
+
+    <!-- Синяя контурная рамка -->
+    <path
+        android:strokeColor="#2979FF"
+        android:strokeWidth="4"
+        android:pathData="M4,4h312v172h-312z" />
+
+    <!-- Корпус телевизора с антеннами -->
+    <path
+        android:fillColor="#2979FF"
+        android:pathData="M160,42 L132,18 L126,24 L152,48 L104,48 C93,48 84,57 84,68 L84,132 C84,143 93,152 104,152 L216,152 C227,152 236,143 236,132 L236,68 C236,57 227,48 216,48 L168,48 L194,24 L188,18 Z M216,132 L104,132 L104,68 L216,68 Z" />
+
+    <!-- Значок воспроизведения Play -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M148,82 L148,118 L180,100 Z" />
+</vector>
