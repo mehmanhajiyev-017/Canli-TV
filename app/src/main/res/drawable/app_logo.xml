@@ -5,28 +5,38 @@
     android:viewportWidth="192"
     android:viewportHeight="192">
 
-    <!-- Göy dairəvi əsas fon -->
+    <!-- Əsas mavi dairəvi fon -->
     <path
-        android:fillColor="#0D2B45"
-        android:pathData="M96,96m-92,0a92,92 0,1 1,184 0a92,92 0,1 1,-184 0" />
+        android:fillColor="#1E88E5"
+        android:pathData="M96,96m-90,0a90,90 0,1 1,180 0a90,90 0,1 1,-180 0" />
 
-    <!-- Dairənin parlaq göy kənar xətti -->
+    <!-- Dairənin kənarındakı zərif açıq mavi haşiyə -->
     <path
-        android:strokeColor="#52B6FF"
+        android:strokeColor="#64B5F6"
+        android:strokeWidth="5"
+        android:pathData="M96,96m-84,0a84,84 0,1 1,168 0a84,84 0,1 1,-168 0" />
+
+    <!-- Televizorun iki ağ anteni -->
+    <path
+        android:strokeColor="#FFFFFF"
         android:strokeWidth="6"
-        android:pathData="M96,96m-86,0a86,86 0,1 1,172 0a86,86 0,1 1,-172 0" />
+        android:strokeLineCap="round"
+        android:pathData="M72,28 L96,52 L120,28" />
 
-    <!-- Loqodakı göy daxili kvadrat çərçivə -->
+    <!-- Televizorun ağ xarici çərçivəsi (küncləri yumşaldılmış) -->
     <path
-        android:strokeColor="#52B6FF"
+        android:strokeColor="#FFFFFF"
         android:strokeWidth="6"
-        android:pathData="M52,52 L140,52 L140,140 L52,140 Z" />
-
-    <!-- Ortadakı Play (Oynatma) üçbucağı -->
-    <path
-        android:fillColor="#52B6FF"
-        android:strokeColor="#52B6FF"
-        android:strokeWidth="4"
         android:strokeLineJoin="round"
-        android:pathData="M78,66 L130,96 L78,126 Z" />
+        android:pathData="M44,52 L148,52 A14,14 0 0 1 162,66 L162,126 A14,14 0 0 1 148,140 L44,140 A14,14 0 0 1 30,126 L30,66 A14,14 0 0 1 44,52 Z" />
+
+    <!-- 'T' hərfi -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,78 L88,78 L88,90 L76,90 L76,122 L64,122 L64,90 L52,90 Z" />
+
+    <!-- 'V' hərfi -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M96,78 L108,78 L119,112 L130,78 L142,78 L126,122 L112,122 Z" />
 </vector>
