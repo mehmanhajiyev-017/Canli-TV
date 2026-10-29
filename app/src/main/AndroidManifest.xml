@@ -6,7 +6,9 @@
 
     <application
         android:allowBackup="true"
-        android:label="TV"
+        android:icon="@drawable/ic_tv_icon"
+        android:banner="@drawable/ic_tv_icon"
+        android:label="Canlı TV"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
