@@ -18,7 +18,11 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
+
+      - name: Установка совместимой версии Gradle 8.2
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
 
       - name: Принятие лицензий Android SDK
         run: |
@@ -35,15 +39,7 @@ jobs:
 
       - name: Сборка APK
         run: |
-          GRADLEW_PATH=$(find . -name "gradlew" -type f | head -n 1)
-          if [ -n "$GRADLEW_PATH" ]; then
-            DIR=$(dirname "$GRADLEW_PATH")
-            cd "$DIR"
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon
-          else
-            gradle assembleDebug --no-daemon
-          fi
+          gradle assembleDebug --no-daemon
 
       - name: Загрузка готового APK
         uses: actions/upload-artifact@v4
