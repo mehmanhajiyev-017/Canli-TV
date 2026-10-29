@@ -13,6 +13,7 @@
         app:use_controller="false"
         app:resize_mode="fit" />
 
+    <!-- Sağ Yuxarı Status -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
@@ -27,7 +28,7 @@
             android:id="@+id/tvSyncChannels"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Channels: 0"
+            android:text="Kanallar: 0"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -37,7 +38,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
-            android:text="Logotypes: 0"
+            android:text="Loqolar: 0"
             android:textColor="#B0BEC5"
             android:textSize="13sp" />
 
@@ -46,29 +47,30 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
-            android:text="Programs: 0"
+            android:text="Proqramlar: 0"
             android:textColor="#B0BEC5"
             android:textSize="13sp" />
     </LinearLayout>
 
+    <!-- Sol Kateqoriyalar -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="290dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="#E60B0E14"
+        android:background="#F00B0E14"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="18dp"
         android:visibility="gone">
 
         <TextView
             android:id="@+id/tvCategoriesTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:text="Категории"
+            android:layout_marginBottom="14dp"
+            android:text="Kateqoriyalar"
             android:textColor="#ECEFF1"
-            android:textSize="18sp"
+            android:textSize="20sp"
             android:textStyle="bold" />
 
         <androidx.recyclerview.widget.RecyclerView
@@ -80,8 +82,8 @@
         <LinearLayout
             android:id="@+id/btnOpenSettings"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="10dp"
+            android:layout_height="50dp"
+            android:layout_marginTop="12dp"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
@@ -93,26 +95,27 @@
                 android:layout_height="wrap_content"
                 android:text="⚙"
                 android:textColor="#B0BEC5"
-                android:textSize="18sp" />
+                android:textSize="20sp" />
 
             <TextView
                 android:id="@+id/tvSettingsBtnText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
-                android:text="Настройки"
+                android:text="Tənzimləmələr"
                 android:textColor="#ECEFF1"
-                android:textSize="14sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Kanallar Paneli -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="390dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="#EB0B0E14"
+        android:background="#F20B0E14"
         android:orientation="vertical"
         android:padding="16dp"
         android:visibility="gone">
@@ -123,6 +126,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
+    <!-- Aşağı Məlumat Banneri -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -175,6 +179,7 @@
             android:textSize="14sp" />
     </LinearLayout>
 
+    <!-- Numpad -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="210dp"
@@ -215,6 +220,7 @@
         </GridLayout>
     </LinearLayout>
 
+    <!-- Modern Leanback "Tənzimləmələr" Paneli -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -227,31 +233,34 @@
         android:visibility="gone">
 
         <LinearLayout
-            android:layout_width="560dp"
+            android:layout_width="600dp"
             android:layout_height="wrap_content"
             android:background="#161B26"
-            android:elevation="12dp"
+            android:elevation="16dp"
             android:orientation="vertical"
-            android:padding="26dp">
+            android:padding="28dp">
 
+            <!-- Dialoq Başlığı -->
             <TextView
                 android:id="@+id/tvSettingsDialogTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="18dp"
-                android:text="Управление источниками"
+                android:layout_marginBottom="20dp"
+                android:text="Mənbələrin idarə edilməsi"
                 android:textColor="#FFFFFF"
-                android:textSize="20sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
 
+            <!-- Pleylist M3U -->
             <TextView
                 android:id="@+id/tvLabelM3u"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="6dp"
-                android:text="1. Плейлист (M3U URL):"
+                android:text="1. Pleylist (M3U URL):"
                 android:textColor="#B0BEC5"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -264,7 +273,7 @@
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:hint="Вставьте M3U ссылку"
+                    android:hint="M3U linkini daxil edin"
                     android:paddingStart="14dp"
                     android:paddingEnd="14dp"
                     android:singleLine="true"
@@ -289,15 +298,17 @@
                     android:textSize="18sp" />
             </LinearLayout>
 
+            <!-- EPG URL -->
             <TextView
                 android:id="@+id/tvLabelEpg"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:layout_marginBottom="6dp"
-                android:text="2. Телепрограмма (EPG XMLTV / .gz URL):"
+                android:text="2. Proqram bələdçisi (EPG XMLTV / .gz URL):"
                 android:textColor="#B0BEC5"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -310,7 +321,7 @@
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:hint="Вставьте EPG ссылку (.xml / .gz)"
+                    android:hint="EPG linkini daxil edin (.xml / .gz)"
                     android:paddingStart="14dp"
                     android:paddingEnd="14dp"
                     android:singleLine="true"
@@ -335,15 +346,17 @@
                     android:textSize="18sp" />
             </LinearLayout>
 
+            <!-- Dil Seçimi Bölməsi -->
             <TextView
                 android:id="@+id/tvLabelLanguage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
                 android:layout_marginBottom="8dp"
-                android:text="Dil / Язык / Language:"
+                android:text="Dil seçimi:"
                 android:textColor="#B0BEC5"
-                android:textSize="13sp" />
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -351,55 +364,59 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
+                <!-- 🇦🇿 Kvadrat AZ -->
                 <LinearLayout
                     android:id="@+id/btnFlagAz"
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
                     android:orientation="vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇦🇿" android:textSize="20sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="AZ" android:textColor="#FFFFFF" android:textSize="9sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇦🇿" android:textSize="22sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="AZ" android:textColor="#FFFFFF" android:textSize="10sp" android:textStyle="bold" />
                 </LinearLayout>
 
+                <!-- 🇷🇺 Kvadrat RU -->
                 <LinearLayout
                     android:id="@+id/btnFlagRu"
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
                     android:layout_marginStart="10dp"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
                     android:orientation="vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇷🇺" android:textSize="20sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RU" android:textColor="#FFFFFF" android:textSize="9sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇷🇺" android:textSize="22sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RU" android:textColor="#FFFFFF" android:textSize="10sp" android:textStyle="bold" />
                 </LinearLayout>
 
+                <!-- 🇬🇧 Kvadrat EN -->
                 <LinearLayout
                     android:id="@+id/btnFlagEn"
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
                     android:layout_marginStart="10dp"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
                     android:orientation="vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇬🇧" android:textSize="20sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="EN" android:textColor="#FFFFFF" android:textSize="9sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇬🇧" android:textSize="22sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="EN" android:textColor="#FFFFFF" android:textSize="10sp" android:textStyle="bold" />
                 </LinearLayout>
 
+                <!-- 🇩🇪 Kvadrat DE -->
                 <LinearLayout
                     android:id="@+id/btnFlagDe"
-                    android:layout_width="52dp"
-                    android:layout_height="52dp"
+                    android:layout_width="54dp"
+                    android:layout_height="54dp"
                     android:layout_marginStart="10dp"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
                     android:orientation="vertical">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇩🇪" android:textSize="20sp" />
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DE" android:textColor="#FFFFFF" android:textSize="9sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🇩🇪" android:textSize="22sp" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DE" android:textColor="#FFFFFF" android:textSize="10sp" android:textStyle="bold" />
                 </LinearLayout>
 
                 <View
@@ -407,33 +424,37 @@
                     android:layout_height="1dp"
                     android:layout_weight="1" />
 
+                <!-- Yeniləmə Düyməsi -->
                 <Button
                     android:id="@+id/btnCheckAppUpdate"
                     style="?android:attr/borderlessButtonStyle"
                     android:layout_width="wrap_content"
-                    android:layout_height="44dp"
+                    android:layout_height="46dp"
                     android:layout_marginEnd="8dp"
                     android:text="🔄 Yenilə"
                     android:textColor="#2979FF"
                     android:textStyle="bold" />
 
+                <!-- Bağla Düyməsi -->
                 <Button
                     android:id="@+id/btnCloseSettings"
                     style="?android:attr/borderlessButtonStyle"
                     android:layout_width="wrap_content"
-                    android:layout_height="44dp"
-                    android:text="ЗАКРЫТЬ"
+                    android:layout_height="46dp"
+                    android:text="BAĞLA"
                     android:textStyle="bold" />
             </LinearLayout>
 
+            <!-- Yenilənmə Statusu -->
             <TextView
                 android:id="@+id/tvUpdateStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
                 android:text=""
                 android:textColor="#4CAF50"
-                android:textSize="12sp"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 android:visibility="gone" />
 
         </LinearLayout>
