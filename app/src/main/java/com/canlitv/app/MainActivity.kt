@@ -1,12 +1,16 @@
 package com.canlitv.app
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Xml
@@ -21,7 +25,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -42,7 +45,6 @@ import okhttp3.Response
 import org.xmlpull.v1.XmlPullParser
 import java.io.BufferedInputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.text.SimpleDateFormat
@@ -110,7 +112,7 @@ class MainActivity : AppCompatActivity() {
     private val allChannels = mutableListOf<Channel>()
     private val displayedChannels = mutableListOf<Channel>()
     private val categories = mutableListOf<String>()
-    private var selectedCategory = "Все"
+    private var selectedCategory = "Hamısı"
     private val favoriteUrls = mutableSetOf<String>()
 
     private val currentProgramsMap = ConcurrentHashMap<String, String>()
@@ -139,11 +141,41 @@ class MainActivity : AppCompatActivity() {
     private var isEpgLoading = false
 
     private var currentLang = "az"
+    private var downloadId: Long = -1L
+
+    private val downloadReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
+            if (id != -1L && id == downloadId) {
+                val dManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val uri = dManager.getUriForDownloadedFile(downloadId)
+                if (uri != null) {
+                    tvUpdateStatus.setTextColor(Color.parseColor("#4CAF50"))
+                    tvUpdateStatus.text = getLocalizedText("update_ready")
+
+                    val install = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/vnd.android.package-archive")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    }
+                    startActivity(install)
+                } else {
+                    tvUpdateStatus.setTextColor(Color.parseColor("#FF5252"))
+                    tvUpdateStatus.text = "Fayl tapılmadı"
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(downloadReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+        }
 
         rowDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#33151A22"))
@@ -319,7 +351,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Tətbiqi birbaşa yeniləmək düyməsi
         btnCheckAppUpdate.setOnClickListener {
             checkAndDownloadAppUpdate()
         }
@@ -336,80 +367,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkAndDownloadAppUpdate() {
         tvUpdateStatus.visibility = View.VISIBLE
-        tvUpdateStatus.text = "Yeniləmə yoxlanılır..."
+        tvUpdateStatus.setTextColor(Color.parseColor("#2979FF"))
+        tvUpdateStatus.text = getLocalizedText("update_checking")
 
-        // Sizin serverdəki daimi ən son APK linki (hajiyev.eu)
         val updateUrl = "https://hajiyev.eu/canlitv/app-release.apk"
 
-        val client = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
-
-        val request = Request.Builder().url(updateUrl).build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread {
-                    tvUpdateStatus.text = "Serverə qoşulmaq olmadı"
-                }
+        try {
+            val dManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val request = DownloadManager.Request(Uri.parse(updateUrl)).apply {
+                setTitle("Canli TV Yenilənmə")
+                setDescription(getLocalizedText("update_downloading"))
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "app-release.apk")
+                setMimeType("application/vnd.android.package-archive")
             }
 
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    runOnUiThread {
-                        tvUpdateStatus.text = "Yeniləmə tapılmadı (${response.code})"
-                    }
-                    return
-                }
+            // Köhnə yüklənmiş fayl varsa silirik
+            val oldFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "app-release.apk")
+            if (oldFile.exists()) oldFile.delete()
 
-                val body = response.body
-                if (body == null) {
-                    runOnUiThread { tvUpdateStatus.text = "Fayl boşdur" }
-                    return
-                }
-
-                runOnUiThread { tvUpdateStatus.text = "Yüklənir..." }
-
-                try {
-                    val apkFile = File(getExternalFilesDir(null), "update.apk")
-                    val inputStream = body.byteStream()
-                    val outputStream = FileOutputStream(apkFile)
-                    val buffer = ByteArray(4096)
-                    var read: Int
-
-                    while (inputStream.read(buffer).also { read = it } != -1) {
-                        outputStream.write(buffer, 0, read)
-                    }
-
-                    outputStream.flush()
-                    outputStream.close()
-                    inputStream.close()
-
-                    runOnUiThread {
-                        tvUpdateStatus.text = "Yükləndi! Quraşdırılır..."
-                        installDownloadedApk(apkFile)
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread {
-                        tvUpdateStatus.text = "Yazılma xətası: ${e.message}"
-                    }
-                }
-            }
-        })
-    }
-
-    private fun installDownloadedApk(apkFile: File) {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-            val apkUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                FileProvider.getUriForFile(this@MainActivity, "$packageName.provider", apkFile)
-            } else {
-                Uri.fromFile(apkFile)
-            }
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            downloadId = dManager.enqueue(request)
+            tvUpdateStatus.text = getLocalizedText("update_downloading")
+        } catch (e: Exception) {
+            tvUpdateStatus.setTextColor(Color.parseColor("#FF5252"))
+            tvUpdateStatus.text = "Xəta: ${e.message}"
         }
-        startActivity(intent)
     }
 
     private fun initFlagButtons() {
@@ -434,7 +416,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateFlagBackground(btn: LinearLayout, code: String, isFocused: Boolean) {
         val isSelected = (currentLang == code)
         val bg = GradientDrawable().apply {
-            cornerRadius = 12f
+            cornerRadius = 14f
             when {
                 isFocused -> {
                     setColor(Color.parseColor("#402979FF"))
@@ -524,6 +506,18 @@ class MainActivity : AppCompatActivity() {
             "de" -> "SCHLIESSEN"
             else -> "ЗАКРЫТЬ"
         }
+        etM3uUrl.hint = when (currentLang) {
+            "az" -> "M3U linkini daxil edin"
+            "en" -> "Enter M3U URL"
+            "de" -> "M3U-URL eingeben"
+            else -> "Вставьте M3U ссылку"
+        }
+        etEpgUrl.hint = when (currentLang) {
+            "az" -> "EPG linkini daxil edin (.xml / .gz)"
+            "en" -> "Enter EPG URL (.xml / .gz)"
+            "de" -> "EPG-URL eingeben (.xml / .gz)"
+            else -> "Вставьте EPG ссылку (.xml / .gz)"
+        }
     }
 
     private fun getAllCategoryName(): String {
@@ -587,6 +581,42 @@ class MainActivity : AppCompatActivity() {
                 "en" -> "Playback error"
                 "de" -> "Wiedergabefehler"
                 else -> "Ошибка воспроизведения"
+            }
+            "update_checking" -> when (currentLang) {
+                "az" -> "Yeniləmə yoxlanılır..."
+                "en" -> "Checking for update..."
+                "de" -> "Update wird gesucht..."
+                else -> "Проверка обновления..."
+            }
+            "update_conn_fail" -> when (currentLang) {
+                "az" -> "Serverə qoşulmaq olmadı"
+                "en" -> "Server connection failed"
+                "de" -> "Serververbindung fehlgeschlagen"
+                else -> "Не удалось подключиться к серверу"
+            }
+            "update_not_found" -> when (currentLang) {
+                "az" -> "Yeniləmə tapılmadı"
+                "en" -> "Update not found"
+                "de" -> "Kein Update gefunden"
+                else -> "Обновление не найдено"
+            }
+            "update_empty" -> when (currentLang) {
+                "az" -> "Fayl boşdur"
+                "en" -> "File is empty"
+                "de" -> "Datei ist leer"
+                else -> "Файл пуст"
+            }
+            "update_downloading" -> when (currentLang) {
+                "az" -> "Yüklənir..."
+                "en" -> "Downloading..."
+                "de" -> "Wird heruntergeladen..."
+                else -> "Загрузка..."
+            }
+            "update_ready" -> when (currentLang) {
+                "az" -> "Yükləndi! Quraşdırılır..."
+                "en" -> "Downloaded! Installing..."
+                "de" -> "Heruntergeladen! Wird installiert..."
+                else -> "Загружено! Установка..."
             }
             else -> ""
         }
@@ -729,6 +759,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(downloadReceiver)
+        } catch (_: Exception) {}
         player?.release()
         player = null
         stopPeriodicSync()
@@ -869,8 +902,10 @@ class MainActivity : AppCompatActivity() {
         isM3uLoading = true
         runOnUiThread { 
             showSyncCard()
-            tvSyncChannels.text = "Channels: 0"
-            tvSyncLogos.text = "Logotypes: 0"
+            val chTxt = when (currentLang) { "az" -> "Kanallar"; "en" -> "Channels"; "de" -> "Kanäle"; else -> "Каналы" }
+            val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
+            tvSyncChannels.text = "$chTxt: 0"
+            tvSyncLogos.text = "$logoTxt: 0"
         }
 
         val client = OkHttpClient.Builder()
@@ -933,8 +968,10 @@ class MainActivity : AppCompatActivity() {
                 val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
 
                 runOnUiThread {
-                    tvSyncChannels.text = "Channels: ${allChannels.size}"
-                    tvSyncLogos.text = "Logotypes: $logosCount"
+                    val chTxt = when (currentLang) { "az" -> "Kanallar"; "en" -> "Channels"; "de" -> "Kanäle"; else -> "Каналы" }
+                    val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
+                    tvSyncChannels.text = "$chTxt: ${allChannels.size}"
+                    tvSyncLogos.text = "$logoTxt: $logosCount"
                     checkAndScheduleHideSyncCard()
                 }
 
@@ -971,7 +1008,6 @@ class MainActivity : AppCompatActivity() {
         var currentGroup = ""
         var currentTvgId = ""
         var counter = 1
-        var logosFoundCount = 0
 
         val tempChannels = mutableListOf<Channel>()
         val tempCategories = LinkedHashSet<String>()
@@ -985,11 +1021,7 @@ class MainActivity : AppCompatActivity() {
         for (line in lines) {
             val trimmed = line.trim()
             if (trimmed.startsWith("#EXTINF", ignoreCase = true)) {
-                val logoFound = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
-                if (logoFound.isNotEmpty()) {
-                    currentLogo = logoFound
-                    logosFoundCount++
-                }
+                currentLogo = logoRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 currentTvgId = idRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 val groupFound = groupRegex.find(trimmed)?.groups?.get(1)?.value?.trim() ?: ""
                 if (groupFound.isNotEmpty()) {
@@ -997,12 +1029,6 @@ class MainActivity : AppCompatActivity() {
                     tempCategories.add(currentGroup)
                 }
                 currentName = trimmed.substringAfterLast(",").trim()
-            } else if (trimmed.startsWith("#EXTIMG:", ignoreCase = true)) {
-                val img = trimmed.substringAfter(":").trim()
-                if (img.isNotEmpty()) {
-                    currentLogo = img
-                    logosFoundCount++
-                }
             } else if (trimmed.startsWith("#EXTGRP:", ignoreCase = true)) {
                 val grp = trimmed.substringAfter(":").trim()
                 if (grp.isNotEmpty()) {
@@ -1024,16 +1050,6 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
                 counter++
-
-                if (counter % 250 == 0) {
-                    val curChCount = counter
-                    val curLogoCount = logosFoundCount
-                    runOnUiThread {
-                        tvSyncChannels.text = "Channels: $curChCount"
-                        tvSyncLogos.text = "Logotypes: $curLogoCount"
-                    }
-                }
-
                 currentName = ""; currentLogo = ""; currentGroup = ""; currentTvgId = ""
             }
         }
@@ -1073,7 +1089,8 @@ class MainActivity : AppCompatActivity() {
         isEpgLoading = true
         runOnUiThread {
             showSyncCard()
-            tvSyncPrograms.text = "Programs: 0"
+            val progTxt = when (currentLang) { "az" -> "Proqramlar"; "en" -> "Programs"; "de" -> "Sendungen"; else -> "Программы" }
+            tvSyncPrograms.text = "$progTxt: 0"
         }
 
         val client = OkHttpClient.Builder()
@@ -1190,7 +1207,8 @@ class MainActivity : AppCompatActivity() {
 
                                                 val quickLogoCount = allChannels.count { it.logoUrl.isNotEmpty() }
                                                 runOnUiThread {
-                                                    tvSyncLogos.text = "Logotypes: $quickLogoCount"
+                                                    val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
+                                                    tvSyncLogos.text = "$logoTxt: $quickLogoCount"
                                                     recyclerViewChannels.adapter?.notifyDataSetChanged()
                                                 }
                                             }
@@ -1206,13 +1224,6 @@ class MainActivity : AppCompatActivity() {
                                                 inProgramme = true
                                                 isCurrentProg = true
                                                 progTitle = ""
-                                            }
-
-                                            if (parsedCount % 2000 == 0) {
-                                                val currentLiveCount = parsedCount
-                                                runOnUiThread {
-                                                    tvSyncPrograms.text = "Programs: $currentLiveCount"
-                                                }
                                             }
                                         }
                                         "title" -> {
@@ -1268,8 +1279,10 @@ class MainActivity : AppCompatActivity() {
                         val finalLogosCount = allChannels.count { it.logoUrl.isNotEmpty() }
 
                         runOnUiThread {
-                            tvSyncPrograms.text = "Programs: $parsedCount"
-                            tvSyncLogos.text = "Logotypes: $finalLogosCount"
+                            val progTxt = when (currentLang) { "az" -> "Proqramlar"; "en" -> "Programs"; "de" -> "Sendungen"; else -> "Программы" }
+                            val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
+                            tvSyncPrograms.text = "$progTxt: $parsedCount"
+                            tvSyncLogos.text = "$logoTxt: $finalLogosCount"
                             recyclerViewChannels.adapter?.notifyDataSetChanged()
                             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
                                 showInfoBanner(allChannels[currentPlayingIndex])
