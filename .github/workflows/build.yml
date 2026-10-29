@@ -2,7 +2,7 @@ name: Canli TV APK Derle
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -10,39 +10,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Клонирование репозитория
+      - name: Kodu Cek
         uses: actions/checkout@v4
 
-      - name: Установка Java 17
+      - name: Java 17 Qurasdir
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Установка совместимой версии Gradle 8.2
+      - name: Stabil Gradle 8.2 Qurasdir
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.2'
 
-      - name: Принятие лицензий Android SDK
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      - name: Подготовка Debug Keystore
+      - name: Sabit Debug Keystore Yarat
         run: |
           mkdir -p ~/.android
-          if [ -n "${{ secrets.DEBUG_KEYSTORE }}" ]; then
-            echo "${{ secrets.DEBUG_KEYSTORE }}" | tr -d '\r\n ' | base64 -d > ~/.android/debug.keystore
-          else
-            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          rm -f ~/.android/debug.keystore
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=AndroidDebug,O=Android,C=US"
 
-      - name: Сборка APK
+      # Передаем номер сборки GitHub в Gradle
+      - name: APK Derle
+        run: gradle assembleDebug -PautoVersionCode=${{ github.run_number }} --no-daemon
+
+      - name: APK Adini Hazirla
         run: |
-          gradle assembleDebug --no-daemon
+          mkdir -p final_apk
+          cp app/build/outputs/apk/debug/app-debug.apk final_apk/app-release.apk
 
-      - name: Загрузка готового APK
+      - name: APK Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: Canli-TV-Debug-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          name: app-release
+          path: final_apk/app-release.apk
