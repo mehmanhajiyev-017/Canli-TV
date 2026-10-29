@@ -750,7 +750,7 @@ class MainActivity : AppCompatActivity() {
 
         val groupRegex = Regex("""group-title\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
         val logoRegex = Regex("""(?:tvg-logo|logo)\s*=\s*["']?([^"',\s\r\n]+)["']?""", RegexOption.IGNORE_CASE)
-        val idRegex = Regex("""tvg-id\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
+        val idRegex = Regex("""(?:tvg-id|tvg-name)\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
 
         for (line in lines) {
             val trimmed = line.trim()
@@ -829,8 +829,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(25, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -838,7 +838,7 @@ class MainActivity : AppCompatActivity() {
             .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Cache-Control", "no-cache, no-store, must-revalidate")
             .header("Pragma", "no-cache")
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .header("User-Agent", "Mozilla/5.0")
             .build()
 
         client.newCall(request).enqueue(object : Callback {
@@ -952,6 +952,7 @@ class MainActivity : AppCompatActivity() {
                                             val startMs = parseXmlTvTime(startStr)
                                             val stopMs = parseXmlTvTime(stopStr)
 
+                                            // Genişletilmiş kontrol: Yayın şu an devam ediyorsa listeye al
                                             if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
                                                 inProgramme = true
                                                 isCurrentProg = true
@@ -1002,6 +1003,7 @@ class MainActivity : AppCompatActivity() {
                             mappedPrograms[chId] = title
                             channelIdToNames[chId]?.forEach { name ->
                                 mappedPrograms[normalizeName(name)] = title
+                                mappedPrograms[name.lowercase(Locale.ROOT)] = title
                             }
                         }
 
@@ -1036,7 +1038,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun normalizeName(text: String): String {
         return text.lowercase(Locale.ROOT)
-            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps)\b"""), "")
+            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps|orig|original)\b"""), "")
             .replace(Regex("""[^a-z0-9а-яёәғçşöüı]"""), "")
             .trim()
     }
@@ -1050,7 +1052,7 @@ class MainActivity : AppCompatActivity() {
                 format.parse(clean)?.time ?: 0L
             } else {
                 val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-                format.timeZone = TimeZone.getDefault()
+                format.timeZone = TimeZone.getTimeZone("UTC")
                 format.parse(clean.substring(0, 14))?.time ?: 0L
             }
         } catch (e: Exception) {
