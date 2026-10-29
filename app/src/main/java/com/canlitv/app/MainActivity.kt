@@ -648,8 +648,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -830,7 +830,7 @@ class MainActivity : AppCompatActivity() {
             .followRedirects(true)
             .followSslRedirects(true)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -945,14 +945,13 @@ class MainActivity : AppCompatActivity() {
                                                 }
                                             }
 
-                                            parsedCount++
                                             val startStr = parser.getAttributeValue(null, "start") ?: ""
                                             val stopStr = parser.getAttributeValue(null, "stop") ?: ""
                                             progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
                                             val startMs = parseXmlTvTime(startStr)
                                             val stopMs = parseXmlTvTime(stopStr)
 
-                                            // Genişletilmiş kontrol: Yayın şu an devam ediyorsa listeye al
+                                            // İndiki saat bu verilişin yayım vaxtı daxilindədirsə götürürük
                                             if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
                                                 inProgramme = true
                                                 isCurrentProg = true
@@ -974,6 +973,7 @@ class MainActivity : AppCompatActivity() {
                                         }
                                         "programme" -> {
                                             if (inProgramme && isCurrentProg && progTitle.isNotEmpty() && progChannel.isNotEmpty()) {
+                                                parsedCount++
                                                 livePrograms[progChannel.lowercase(Locale.ROOT)] = progTitle
                                             }
                                             inProgramme = false
@@ -1013,7 +1013,7 @@ class MainActivity : AppCompatActivity() {
                         val finalLogosCount = allChannels.count { it.logoUrl.isNotEmpty() }
 
                         runOnUiThread {
-                            tvSyncPrograms.text = "Программы: $parsedCount"
+                            tvSyncPrograms.text = "Программы: ${currentProgramsMap.size}"
                             tvSyncLogos.text = "Логотипы: $finalLogosCount"
                             recyclerViewChannels.adapter?.notifyDataSetChanged()
                             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
