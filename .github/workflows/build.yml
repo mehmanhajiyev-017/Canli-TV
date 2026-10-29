@@ -2,7 +2,7 @@ name: Canli TV APK Derle
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -10,39 +10,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Kodu Cek
+      - name: Kodu Çək
         uses: actions/checkout@v4
 
-      - name: Java 17 Qurasdir
+      - name: Java 17 Quraşdır
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Stabil Gradle 8.2 Qurasdir
+      - name: Sabit Gradle Quraşdır
         uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.2'
 
-      # Восстанавливаем строго один и тот же постоянный ключ подписи
-      - name: Sabit Debug Keystore Berpa Et
+      - name: Sabit Debug Keystore Bərpa Et
         run: |
           mkdir -p ~/.android
-          echo "/u3+7QAAAAIAAAABAAAAAQANYW5kcm9pZGRlYnVna2V5AAABh04z6v4AAAaEMIIFfTCCBFWgAwIBAgIEW+R5vDANBgkqhkiG9w0BAQsFADBLMQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW5kcm9pZDEtMCsGA1UECxMkQW5kcm9pZCBEZWJ1ZyBLZXlzdG9yZSBSZWxlYXNlIEtleSBNY3QwIBcNMTkwOTE5MDcwNjA3WhgPMjA0OTE5MDcwNjA3WjBLMQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW5kcm9pZDEtMCsGA1UECxMkQW5kcm9pZCBEZWJ1ZyBLZXlzdG9yZSBSZWxlYXNlIEtleSBNY3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCb+o90Y2j2L7dM8bY+pD7fDqjQZ6aR0bM3aV3u2bM8aT7y4N9E6Y6X3c8E8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8QIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQCk9N3X2B1D6a6S9H6N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q==" | base64 -d > ~/.android/debug.keystore || true
-          if [ ! -s ~/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=AndroidDebug,O=Android,C=US"
+          if [ -n "${{ secrets.DEBUG_KEYSTORE }}" ]; then
+            echo "${{ secrets.DEBUG_KEYSTORE }}" | tr -d '\r\n ' | base64 -d > ~/.android/debug.keystore
+          else
+            echo "Keystore secret-i boşdur, standart açar yaradılır..."
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-      - name: APK Derle
-        run: gradle assembleDebug -PautoVersionCode=${{ github.run_number }} --no-daemon
+      - name: İcazə Ver (Gradlew)
+        run: chmod +x gradlew
 
-      - name: APK Adini Hazirla
-        run: |
-          mkdir -p final_apk
-          cp app/build/outputs/apk/debug/app-debug.apk final_apk/app-release.apk
+      - name: APK Dərlə
+        run: ./gradlew assembleDebug --stacktrace
 
-      - name: APK Yukle
+      - name: APK Yüklə (Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: final_apk/app-release.apk
+          name: Canli-TV-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
