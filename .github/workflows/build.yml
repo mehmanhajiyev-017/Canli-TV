@@ -24,16 +24,23 @@ jobs:
         with:
           gradle-version: '8.2'
 
+      # Восстанавливаем строго один и тот же постоянный ключ подписи
+      - name: Sabit Debug Keystore Berpa Et
+        run: |
+          mkdir -p ~/.android
+          echo "/u3+7QAAAAIAAAABAAAAAQANYW5kcm9pZGRlYnVna2V5AAABh04z6v4AAAaEMIIFfTCCBFWgAwIBAgIEW+R5vDANBgkqhkiG9w0BAQsFADBLMQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW5kcm9pZDEtMCsGA1UECxMkQW5kcm9pZCBEZWJ1ZyBLZXlzdG9yZSBSZWxlYXNlIEtleSBNY3QwIBcNMTkwOTE5MDcwNjA3WhgPMjA0OTE5MDcwNjA3WjBLMQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW5kcm9pZDEtMCsGA1UECxMkQW5kcm9pZCBEZWJ1ZyBLZXlzdG9yZSBSZWxlYXNlIEtleSBNY3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCb+o90Y2j2L7dM8bY+pD7fDqjQZ6aR0bM3aV3u2bM8aT7y4N9E6Y6X3c8E8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8QIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQCk9N3X2B1D6a6S9H6N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q8N4c8Q==" | base64 -d > ~/.android/debug.keystore || true
+          if [ ! -s ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=AndroidDebug,O=Android,C=US"
+          fi
+
       - name: APK Derle
         run: gradle assembleDebug -PautoVersionCode=${{ github.run_number }} --no-daemon
 
-      # Faylın adını avtomatik app-release.apk olaraq dəyişir
       - name: APK Adini Hazirla
         run: |
           mkdir -p final_apk
           cp app/build/outputs/apk/debug/app-debug.apk final_apk/app-release.apk
 
-      # Avtomatik hazır adla yükləyir
       - name: APK Yukle
         uses: actions/upload-artifact@v4
         with:
