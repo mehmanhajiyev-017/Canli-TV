@@ -1,9 +1,11 @@
 package com.canlitv.app
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -19,6 +21,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -38,6 +41,8 @@ import okhttp3.Request
 import okhttp3.Response
 import org.xmlpull.v1.XmlPullParser
 import java.io.BufferedInputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.text.SimpleDateFormat
@@ -73,6 +78,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRefreshM3u: Button
     private lateinit var btnSaveEpg: Button
     private lateinit var btnRefreshEpg: Button
+    private lateinit var btnCheckAppUpdate: Button
+    private lateinit var tvUpdateStatus: TextView
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
     private lateinit var recyclerViewChannels: RecyclerView
@@ -161,6 +168,8 @@ class MainActivity : AppCompatActivity() {
         btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
         btnSaveEpg = findViewById(R.id.btnSaveEpg)
         btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
+        btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
+        tvUpdateStatus = findViewById(R.id.tvUpdateStatus)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
@@ -310,6 +319,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Tətbiqi birbaşa yeniləmək düyməsi
+        btnCheckAppUpdate.setOnClickListener {
+            checkAndDownloadAppUpdate()
+        }
+
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
         }
@@ -318,6 +332,84 @@ class MainActivity : AppCompatActivity() {
         currentLang = prefs.getString("APP_LANG", "az") ?: "az"
         selectedCategory = getAllCategoryName()
         applyLanguageToUI()
+    }
+
+    private fun checkAndDownloadAppUpdate() {
+        tvUpdateStatus.visibility = View.VISIBLE
+        tvUpdateStatus.text = "Yeniləmə yoxlanılır..."
+
+        // Sizin serverdəki daimi ən son APK linki (hajiyev.eu)
+        val updateUrl = "https://hajiyev.eu/canlitv/app-release.apk"
+
+        val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+        val request = Request.Builder().url(updateUrl).build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    tvUpdateStatus.text = "Serverə qoşulmaq olmadı"
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (!response.isSuccessful) {
+                    runOnUiThread {
+                        tvUpdateStatus.text = "Yeniləmə tapılmadı (${response.code})"
+                    }
+                    return
+                }
+
+                val body = response.body
+                if (body == null) {
+                    runOnUiThread { tvUpdateStatus.text = "Fayl boşdur" }
+                    return
+                }
+
+                runOnUiThread { tvUpdateStatus.text = "Yüklənir..." }
+
+                try {
+                    val apkFile = File(getExternalFilesDir(null), "update.apk")
+                    val inputStream = body.byteStream()
+                    val outputStream = FileOutputStream(apkFile)
+                    val buffer = ByteArray(4096)
+                    var read: Int
+
+                    while (inputStream.read(buffer).also { read = it } != -1) {
+                        outputStream.write(buffer, 0, read)
+                    }
+
+                    outputStream.flush()
+                    outputStream.close()
+                    inputStream.close()
+
+                    runOnUiThread {
+                        tvUpdateStatus.text = "Yükləndi! Quraşdırılır..."
+                        installDownloadedApk(apkFile)
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        tvUpdateStatus.text = "Yazılma xətası: ${e.message}"
+                    }
+                }
+            }
+        })
+    }
+
+    private fun installDownloadedApk(apkFile: File) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            val apkUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                FileProvider.getUriForFile(this@MainActivity, "$packageName.provider", apkFile)
+            } else {
+                Uri.fromFile(apkFile)
+            }
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+        }
+        startActivity(intent)
     }
 
     private fun initFlagButtons() {
@@ -419,6 +511,12 @@ class MainActivity : AppCompatActivity() {
             "en" -> "Select Language:"
             "de" -> "Sprache wählen:"
             else -> "Выбор языка:"
+        }
+        btnCheckAppUpdate.text = when (currentLang) {
+            "az" -> "🔄 Yenilə"
+            "en" -> "🔄 Update"
+            "de" -> "🔄 Aktualisieren"
+            else -> "🔄 Обновить"
         }
         btnCloseSettings.text = when (currentLang) {
             "az" -> "BAĞLA"
@@ -569,7 +667,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCheckAppUpdate, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             val defaultBtnBg = GradientDrawable().apply {
@@ -742,6 +840,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
+        tvUpdateStatus.visibility = View.GONE
         updateAllFlagsBackground()
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveM3u.requestFocus()
