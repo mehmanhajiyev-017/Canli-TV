@@ -27,8 +27,15 @@ jobs:
       - name: APK Derle
         run: gradle assembleDebug -PautoVersionCode=${{ github.run_number }} --no-daemon
 
-      - name: APK Yukle (Dinamik Versiya Adi ile)
+      # Faylın adını avtomatik app-release.apk olaraq dəyişir
+      - name: APK Adini Hazirla
+        run: |
+          mkdir -p final_apk
+          cp app/build/outputs/apk/debug/app-debug.apk final_apk/app-release.apk
+
+      # Avtomatik hazır adla yükləyir
+      - name: APK Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: CanliTV-v1.${{ github.run_number }}
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-release
+          path: final_apk/app-release.apk
