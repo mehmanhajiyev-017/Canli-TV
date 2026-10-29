@@ -49,6 +49,7 @@ import java.io.BufferedInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.PushbackInputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -856,18 +857,21 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             showSyncCard()
             tvSyncPrograms.text = "Программы: 0"
+            tvSyncLogos.text = "Логотипы: 0"
         }
 
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
             .build()
 
+        // Запрашиваем поток с явным указанием поддержки прямого считывания
         val request = Request.Builder()
             .url(epgUrl)
             .cacheControl(CacheControl.FORCE_NETWORK)
+            .header("Accept-Encoding", "gzip, deflate, identity")
             .header("User-Agent", "Mozilla/5.0")
             .build()
 
@@ -890,14 +894,20 @@ class MainActivity : AppCompatActivity() {
 
                 Thread({
                     try {
-                        val buffered = BufferedInputStream(bodyStream, 32768)
-                        buffered.mark(2)
-                        val b1 = buffered.read()
-                        val b2 = buffered.read()
-                        buffered.reset()
+                        // Надёжное автоопределение Gzip: читаем первые 2 байта через PushbackInputStream
+                        val pushback = PushbackInputStream(BufferedInputStream(bodyStream, 65536), 2)
+                        val b1 = pushback.read()
+                        val b2 = pushback.read()
 
-                        val isGzip = (b1 == 0x1f && b2 == 0x8b) || epgUrl.endsWith(".gz", ignoreCase = true)
-                        val inStream: InputStream = if (isGzip) GZIPInputStream(buffered, 32768) else buffered
+                        val inStream: InputStream = if (b1 == 0x1f && b2 == 0x8b) {
+                            pushback.unread(b2)
+                            pushback.unread(b1)
+                            GZIPInputStream(pushback, 65536)
+                        } else {
+                            if (b2 != -1) pushback.unread(b2)
+                            if (b1 != -1) pushback.unread(b1)
+                            pushback
+                        }
 
                         val parser = Xml.newPullParser()
                         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
@@ -915,6 +925,8 @@ class MainActivity : AppCompatActivity() {
                         var inChannel = false
                         var inProgramme = false
                         var isCurrentTimeWindow = false
+
+                        var lastUiUpdate = System.currentTimeMillis()
 
                         var eventType = parser.eventType
                         while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -942,7 +954,6 @@ class MainActivity : AppCompatActivity() {
                                         val startMs = parseXmlTvTime(startStr)
                                         val stopMs = parseXmlTvTime(stopStr)
 
-                                        // Проверяем актуальность по времени с учётом часового пояса
                                         isCurrentTimeWindow = if (startMs > 0 && stopMs > 0) {
                                             now in (startMs - 5 * 60 * 1000L)..(stopMs + 5 * 60 * 1000L)
                                         } else {
@@ -982,9 +993,23 @@ class MainActivity : AppCompatActivity() {
                                     currentTag = ""
                                 }
                             }
+
+                            // Обновляем счётчик в реальном времени каждые 1.5 секунды, чтобы было видно прогресс
+                            val timeNow = System.currentTimeMillis()
+                            if (timeNow - lastUiUpdate > 1500) {
+                                lastUiUpdate = timeNow
+                                val currentLogos = tempEpgLogos.size
+                                val currentProg = livePrograms.size
+                                runOnUiThread {
+                                    tvSyncLogos.text = "Логотипы: $currentLogos"
+                                    tvSyncPrograms.text = "Программы: $currentProg"
+                                }
+                            }
+
                             eventType = parser.next()
                         }
 
+                        // Применяем логотипы
                         if (tempEpgLogos.isNotEmpty()) {
                             val finalLogos = HashMap<String, String>()
                             for ((chId, logoUrl) in tempEpgLogos) {
@@ -998,6 +1023,7 @@ class MainActivity : AppCompatActivity() {
                             applyEpgLogosToChannels()
                         }
 
+                        // Сопоставляем программы
                         val mappedPrograms = HashMap<String, String>()
                         for ((chId, title) in livePrograms) {
                             mappedPrograms[chId] = title
