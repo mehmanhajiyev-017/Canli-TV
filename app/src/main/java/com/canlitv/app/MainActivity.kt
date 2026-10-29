@@ -882,7 +882,6 @@ class MainActivity : AppCompatActivity() {
                         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
                         parser.setInput(inStream, "UTF-8")
 
-                        val now = System.currentTimeMillis()
                         val channelIdToNames = HashMap<String, MutableList<String>>()
                         val livePrograms = HashMap<String, String>()
                         val tempEpgLogos = HashMap<String, String>()
@@ -953,7 +952,6 @@ class MainActivity : AppCompatActivity() {
                                     } else if (tag.equals("programme", ignoreCase = true)) {
                                         if (inProgramme && progChannel.isNotEmpty() && currentProgTitle.isNotEmpty()) {
                                             val key = progChannel.lowercase(Locale.ROOT)
-                                            // Если для канала еще нет программы, сохраняем первую найденную
                                             if (!livePrograms.containsKey(key)) {
                                                 livePrograms[key] = currentProgTitle
                                             }
@@ -980,7 +978,7 @@ class MainActivity : AppCompatActivity() {
                             applyEpgLogosToChannels()
                         }
 
-                        // Привязка программ ко всем возможным вариантам названий каналов
+                        // Привязываем программы ко всем возможным именам каналов
                         val mappedPrograms = HashMap<String, String>()
                         for ((chId, title) in livePrograms) {
                             mappedPrograms[chId] = title
