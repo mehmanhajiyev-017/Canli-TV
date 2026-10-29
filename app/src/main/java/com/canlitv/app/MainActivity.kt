@@ -830,7 +830,7 @@ class MainActivity : AppCompatActivity() {
             .followRedirects(true)
             .followSslRedirects(true)
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(90, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -868,7 +868,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 Thread({
-                    var parsedCount = 0
                     try {
                         val buffered = BufferedInputStream(bodyStream)
                         buffered.mark(2)
@@ -894,13 +893,13 @@ class MainActivity : AppCompatActivity() {
                         var inProgramme = false
                         var progChannel = ""
                         var isCurrentProg = false
-                        var progTitle = ""
                         var logosDispatched = false
 
                         while (eventType != XmlPullParser.END_DOCUMENT) {
                             when (eventType) {
                                 XmlPullParser.START_TAG -> {
-                                    when (parser.name) {
+                                    val tagName = parser.name
+                                    when (tagName) {
                                         "channel" -> {
                                             inChannel = true
                                             currentChannelId = parser.getAttributeValue(null, "id")?.trim() ?: ""
@@ -910,9 +909,9 @@ class MainActivity : AppCompatActivity() {
                                         }
                                         "display-name" -> {
                                             if (inChannel && currentChannelId.isNotEmpty()) {
-                                                val dName = parser.nextText().trim()
-                                                if (dName.isNotEmpty()) {
-                                                    channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }.add(dName)
+                                                val text = parser.nextTextSafe().trim()
+                                                if (text.isNotEmpty()) {
+                                                    channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }.add(text)
                                                 }
                                             }
                                         }
@@ -948,37 +947,38 @@ class MainActivity : AppCompatActivity() {
                                             val startStr = parser.getAttributeValue(null, "start") ?: ""
                                             val stopStr = parser.getAttributeValue(null, "stop") ?: ""
                                             progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
+                                            
                                             val startMs = parseXmlTvTime(startStr)
                                             val stopMs = parseXmlTvTime(stopStr)
 
-                                            // İndiki saat bu verilişin yayım vaxtı daxilindədirsə götürürük
+                                            // Geniş zaman intervalı yoxlaması: Hazırda yayımlanan proqram
                                             if (startMs > 0 && stopMs > 0 && now in startMs..stopMs && progChannel.isNotEmpty()) {
                                                 inProgramme = true
                                                 isCurrentProg = true
-                                                progTitle = ""
+                                            } else {
+                                                inProgramme = false
+                                                isCurrentProg = false
                                             }
                                         }
                                         "title" -> {
                                             if (inProgramme && isCurrentProg) {
-                                                progTitle = parser.nextText().trim()
+                                                val titleText = parser.nextTextSafe().trim()
+                                                if (titleText.isNotEmpty() && progChannel.isNotEmpty()) {
+                                                    livePrograms[progChannel.lowercase(Locale.ROOT)] = titleText
+                                                }
+                                                isCurrentProg = false
                                             }
                                         }
                                     }
                                 }
                                 XmlPullParser.END_TAG -> {
-                                    when (parser.name) {
-                                        "channel" -> {
-                                            inChannel = false
-                                            currentChannelId = ""
-                                        }
-                                        "programme" -> {
-                                            if (inProgramme && isCurrentProg && progTitle.isNotEmpty() && progChannel.isNotEmpty()) {
-                                                parsedCount++
-                                                livePrograms[progChannel.lowercase(Locale.ROOT)] = progTitle
-                                            }
-                                            inProgramme = false
-                                            isCurrentProg = false
-                                        }
+                                    val tagName = parser.name
+                                    if (tagName == "channel") {
+                                        inChannel = false
+                                        currentChannelId = ""
+                                    } else if (tagName == "programme") {
+                                        inProgramme = false
+                                        isCurrentProg = false
                                     }
                                 }
                             }
@@ -998,6 +998,7 @@ class MainActivity : AppCompatActivity() {
                             applyEpgLogosToChannels()
                         }
 
+                        // Verilişləri həm ID, həm display-name, həm də təmizlənmiş adla xəritələyirik
                         val mappedPrograms = HashMap<String, String>()
                         for ((chId, title) in livePrograms) {
                             mappedPrograms[chId] = title
@@ -1036,13 +1037,28 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // nextText() xətalarının qarşısını alan etibarlı mətn oxuyucu
+    private fun XmlPullParser.nextTextSafe(): String {
+        var result = ""
+        if (eventType != XmlPullParser.START_TAG) return result
+        var event = next()
+        while (event != XmlPullParser.END_TAG) {
+            if (event == XmlPullParser.TEXT) {
+                result += text
+            }
+            event = next()
+        }
+        return result
+    }
+
     private fun normalizeName(text: String): String {
         return text.lowercase(Locale.ROOT)
-            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps|orig|original)\b"""), "")
+            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps|orig|original|tv)\b"""), "")
             .replace(Regex("""[^a-z0-9а-яёәғçşöüı]"""), "")
             .trim()
     }
 
+    // EPG vaxtlarını dəqiq millisaniyəyə çevirən funksiya (+0300, +0000, UTC dəstəkli)
     private fun parseXmlTvTime(timeStr: String): Long {
         if (timeStr.length < 14) return 0L
         val clean = timeStr.trim()
@@ -1062,14 +1078,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun getProgramForChannel(ch: Channel): String {
         if (currentProgramsMap.isEmpty()) return ""
+        
+        // 1. tvg-id ilə yoxla
         if (ch.tvgId.isNotEmpty()) {
             currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
+        // 2. Təmizlənmiş adla yoxla
         val normalized = normalizeName(ch.name)
         if (normalized.isNotEmpty()) {
             currentProgramsMap[normalized]?.let { return it }
         }
+        // 3. Orijinal kiçik hərflərlə adla yoxla
         currentProgramsMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
+
+        // 4. Əgər adda nöqtə, defis varsa onları atıb yoxla
+        val simple = ch.name.lowercase(Locale.ROOT).replace("[^a-z0-9а-я]".toRegex(), "")
+        if (simple.isNotEmpty()) {
+            currentProgramsMap[simple]?.let { return it }
+        }
+
         return ""
     }
 
