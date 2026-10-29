@@ -13,19 +13,21 @@ jobs:
       - name: Клонирование репозитория
         uses: actions/checkout@v4
 
-      - name: Проверка структуры файлов
-        run: ls -la
-
       - name: Установка Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
-      - name: Установка Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Настройка Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Восстановление Debug Keystore
+      - name: Принятие лицензий Android SDK
+        run: |
+          yes | sdkmanager --licenses || true
+
+      - name: Подготовка Debug Keystore
         run: |
           mkdir -p ~/.android
           if [ -n "${{ secrets.DEBUG_KEYSTORE }}" ]; then
@@ -36,11 +38,15 @@ jobs:
 
       - name: Сборка APK
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug --stacktrace
+          # Ищем gradlew в корне или подпапках
+          GRADLEW_PATH=$(find . -name "gradlew" -type f | head -n 1)
+          if [ -n "$GRADLEW_PATH" ]; then
+            DIR=$(dirname "$GRADLEW_PATH")
+            cd "$DIR"
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon
           else
-            gradle assembleDebug --stacktrace
+            gradle assembleDebug --no-daemon
           fi
 
       - name: Загрузка готового APK
