@@ -92,18 +92,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
 
-    private lateinit var tvSettingsDialogTitle: TextView
-    private lateinit var tvLabelM3u: TextView
-    private lateinit var tvLabelEpg: TextView
-    private lateinit var tvLabelLanguage: TextView
-    private lateinit var tvSettingsBtnText: TextView
-    private lateinit var tvCategoriesTitle: TextView
-
-    private lateinit var btnFlagAz: LinearLayout
-    private lateinit var btnFlagRu: LinearLayout
-    private lateinit var btnFlagEn: LinearLayout
-    private lateinit var btnFlagDe: LinearLayout
-
     private lateinit var syncStatusCard: View
     private lateinit var tvSyncChannels: TextView
     private lateinit var tvSyncLogos: TextView
@@ -112,7 +100,7 @@ class MainActivity : AppCompatActivity() {
     private val allChannels = mutableListOf<Channel>()
     private val displayedChannels = mutableListOf<Channel>()
     private val categories = mutableListOf<String>()
-    private var selectedCategory = "Hamısı"
+    private var selectedCategory = "Все"
     private val favoriteUrls = mutableSetOf<String>()
 
     private val currentProgramsMap = ConcurrentHashMap<String, String>()
@@ -140,7 +128,6 @@ class MainActivity : AppCompatActivity() {
     private var isM3uLoading = false
     private var isEpgLoading = false
 
-    private var currentLang = "az"
     private var downloadId: Long = -1L
 
     private val downloadReceiver = object : BroadcastReceiver() {
@@ -151,7 +138,7 @@ class MainActivity : AppCompatActivity() {
                 val uri = dManager.getUriForDownloadedFile(downloadId)
                 if (uri != null) {
                     tvUpdateStatus.setTextColor(Color.parseColor("#4CAF50"))
-                    tvUpdateStatus.text = getLocalizedText("update_ready")
+                    tvUpdateStatus.text = "Загружено! Установка..."
 
                     val install = Intent(Intent.ACTION_VIEW).apply {
                         setDataAndType(uri, "application/vnd.android.package-archive")
@@ -160,7 +147,7 @@ class MainActivity : AppCompatActivity() {
                     startActivity(install)
                 } else {
                     tvUpdateStatus.setTextColor(Color.parseColor("#FF5252"))
-                    tvUpdateStatus.text = "Fayl tapılmadı"
+                    tvUpdateStatus.text = "Файл не найден"
                 }
             }
         }
@@ -212,18 +199,6 @@ class MainActivity : AppCompatActivity() {
         tvBannerName = findViewById(R.id.tvBannerName)
         tvBannerCategory = findViewById(R.id.tvBannerCategory)
 
-        tvSettingsDialogTitle = findViewById(R.id.tvSettingsDialogTitle)
-        tvLabelM3u = findViewById(R.id.tvLabelM3u)
-        tvLabelEpg = findViewById(R.id.tvLabelEpg)
-        tvLabelLanguage = findViewById(R.id.tvLabelLanguage)
-        tvSettingsBtnText = findViewById(R.id.tvSettingsBtnText)
-        tvCategoriesTitle = findViewById(R.id.tvCategoriesTitle)
-
-        btnFlagAz = findViewById(R.id.btnFlagAz)
-        btnFlagRu = findViewById(R.id.btnFlagRu)
-        btnFlagEn = findViewById(R.id.btnFlagEn)
-        btnFlagDe = findViewById(R.id.btnFlagDe)
-
         syncStatusCard = findViewById(R.id.syncStatusCard)
         tvSyncChannels = findViewById(R.id.tvSyncChannels)
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
@@ -244,7 +219,6 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
-        initFlagButtons()
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -315,7 +289,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, getLocalizedText("toast_invalid_m3u"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Введите правильный URL M3U", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -325,7 +299,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, getLocalizedText("toast_no_m3u"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "M3U ссылка не введена", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -337,7 +311,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchEPGDirectly(epgUrl)
             } else {
-                Toast.makeText(applicationContext, getLocalizedText("toast_invalid_epg"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Введите правильный URL EPG", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -347,7 +321,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchEPGDirectly(epgUrl)
             } else {
-                Toast.makeText(applicationContext, getLocalizedText("toast_no_epg"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "EPG ссылка не введена", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -358,267 +332,33 @@ class MainActivity : AppCompatActivity() {
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
         }
-
-        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        currentLang = prefs.getString("APP_LANG", "az") ?: "az"
-        selectedCategory = getAllCategoryName()
-        applyLanguageToUI()
     }
 
     private fun checkAndDownloadAppUpdate() {
         tvUpdateStatus.visibility = View.VISIBLE
         tvUpdateStatus.setTextColor(Color.parseColor("#2979FF"))
-        tvUpdateStatus.text = getLocalizedText("update_checking")
+        tvUpdateStatus.text = "Проверка обновления..."
 
         val updateUrl = "https://hajiyev.eu/canlitv/app-release.apk"
 
         try {
             val dManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val request = DownloadManager.Request(Uri.parse(updateUrl)).apply {
-                setTitle("Canli TV Yenilənmə")
-                setDescription(getLocalizedText("update_downloading"))
+                setTitle("Canli TV Обновление")
+                setDescription("Загрузка...")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "app-release.apk")
                 setMimeType("application/vnd.android.package-archive")
             }
 
-            // Köhnə yüklənmiş fayl varsa silirik
             val oldFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "app-release.apk")
             if (oldFile.exists()) oldFile.delete()
 
             downloadId = dManager.enqueue(request)
-            tvUpdateStatus.text = getLocalizedText("update_downloading")
+            tvUpdateStatus.text = "Загрузка..."
         } catch (e: Exception) {
             tvUpdateStatus.setTextColor(Color.parseColor("#FF5252"))
-            tvUpdateStatus.text = "Xəta: ${e.message}"
-        }
-    }
-
-    private fun initFlagButtons() {
-        val flags = listOf(
-            btnFlagAz to "az",
-            btnFlagRu to "ru",
-            btnFlagEn to "en",
-            btnFlagDe to "de"
-        )
-
-        for ((btn, code) in flags) {
-            btn.setOnFocusChangeListener { _, hasFocus ->
-                updateFlagBackground(btn, code, hasFocus)
-            }
-            btn.setOnClickListener {
-                setAppLanguage(code)
-            }
-        }
-        updateAllFlagsBackground()
-    }
-
-    private fun updateFlagBackground(btn: LinearLayout, code: String, isFocused: Boolean) {
-        val isSelected = (currentLang == code)
-        val bg = GradientDrawable().apply {
-            cornerRadius = 14f
-            when {
-                isFocused -> {
-                    setColor(Color.parseColor("#402979FF"))
-                    setStroke(3, Color.parseColor("#FFFFFF"))
-                }
-                isSelected -> {
-                    setColor(Color.parseColor("#2979FF"))
-                    setStroke(2, Color.parseColor("#80FFFFFF"))
-                }
-                else -> {
-                    setColor(Color.parseColor("#1F2736"))
-                    setStroke(2, Color.parseColor("#33FFFFFF"))
-                }
-            }
-        }
-        btn.background = bg
-    }
-
-    private fun updateAllFlagsBackground() {
-        updateFlagBackground(btnFlagAz, "az", btnFlagAz.hasFocus())
-        updateFlagBackground(btnFlagRu, "ru", btnFlagRu.hasFocus())
-        updateFlagBackground(btnFlagEn, "en", btnFlagEn.hasFocus())
-        updateFlagBackground(btnFlagDe, "de", btnFlagDe.hasFocus())
-    }
-
-    private fun setAppLanguage(langCode: String) {
-        currentLang = langCode
-        getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-            .edit()
-            .putString("APP_LANG", langCode)
-            .apply()
-
-        updateAllFlagsBackground()
-        applyLanguageToUI()
-
-        selectedCategory = getAllCategoryName()
-        setupCategoryAdapter()
-        filterChannels(selectedCategory)
-    }
-
-    private fun applyLanguageToUI() {
-        tvCategoriesTitle.text = when (currentLang) {
-            "az" -> "Kateqoriyalar"
-            "en" -> "Categories"
-            "de" -> "Kategorien"
-            else -> "Категории"
-        }
-        tvSettingsBtnText.text = when (currentLang) {
-            "az" -> "Tənzimləmələr"
-            "en" -> "Settings"
-            "de" -> "Einstellungen"
-            else -> "Настройки"
-        }
-        tvSettingsDialogTitle.text = when (currentLang) {
-            "az" -> "Mənbələrin idarə edilməsi"
-            "en" -> "Source Management"
-            "de" -> "Quellenverwaltung"
-            else -> "Управление источниками"
-        }
-        tvLabelM3u.text = when (currentLang) {
-            "az" -> "1. Pleylist (M3U URL):"
-            "en" -> "1. Playlist (M3U URL):"
-            "de" -> "1. Wiedergabeliste (M3U URL):"
-            else -> "1. Плейлист (M3U URL):"
-        }
-        tvLabelEpg.text = when (currentLang) {
-            "az" -> "2. Proqram bələdçisi (EPG XMLTV / .gz URL):"
-            "en" -> "2. TV Guide (EPG XMLTV / .gz URL):"
-            "de" -> "2. TV-Programm (EPG XMLTV / .gz URL):"
-            else -> "2. Телепрограмма (EPG XMLTV / .gz URL):"
-        }
-        tvLabelLanguage.text = when (currentLang) {
-            "az" -> "Dil seçimi:"
-            "en" -> "Select Language:"
-            "de" -> "Sprache wählen:"
-            else -> "Выбор языка:"
-        }
-        btnCheckAppUpdate.text = when (currentLang) {
-            "az" -> "🔄 Yenilə"
-            "en" -> "🔄 Update"
-            "de" -> "🔄 Aktualisieren"
-            else -> "🔄 Обновить"
-        }
-        btnCloseSettings.text = when (currentLang) {
-            "az" -> "BAĞLA"
-            "en" -> "CLOSE"
-            "de" -> "SCHLIESSEN"
-            else -> "ЗАКРЫТЬ"
-        }
-        etM3uUrl.hint = when (currentLang) {
-            "az" -> "M3U linkini daxil edin"
-            "en" -> "Enter M3U URL"
-            "de" -> "M3U-URL eingeben"
-            else -> "Вставьте M3U ссылку"
-        }
-        etEpgUrl.hint = when (currentLang) {
-            "az" -> "EPG linkini daxil edin (.xml / .gz)"
-            "en" -> "Enter EPG URL (.xml / .gz)"
-            "de" -> "EPG-URL eingeben (.xml / .gz)"
-            else -> "Вставьте EPG ссылку (.xml / .gz)"
-        }
-    }
-
-    private fun getAllCategoryName(): String {
-        return when (currentLang) {
-            "az" -> "Hamısı"
-            "en" -> "All"
-            "de" -> "Alle"
-            else -> "Все"
-        }
-    }
-
-    private fun getFavoritesCategoryName(): String {
-        return when (currentLang) {
-            "az" -> "Seçilmişlər"
-            "en" -> "Favorites"
-            "de" -> "Favoriten"
-            else -> "Избранное"
-        }
-    }
-
-    private fun getLocalizedText(key: String): String {
-        return when (key) {
-            "exit_prompt" -> when (currentLang) {
-                "az" -> "Çıxış üçün daha ${5 - backPressCount} dəfə basın"
-                "en" -> "Press back ${5 - backPressCount} more times to exit"
-                "de" -> "Noch ${5 - backPressCount} Mal drücken zum Beenden"
-                else -> "Нажмите ещё ${5 - backPressCount} раз(а) для выхода"
-            }
-            "channel_not_found" -> when (currentLang) {
-                "az" -> "Kanal tapılmadı"
-                "en" -> "Channel not found"
-                "de" -> "Kanal nicht gefunden"
-                else -> "Канал не найден"
-            }
-            "toast_invalid_m3u" -> when (currentLang) {
-                "az" -> "Düzgün M3U URL daxil edin"
-                "en" -> "Enter valid M3U URL"
-                "de" -> "Gültige M3U-URL eingeben"
-                else -> "Введите правильный URL M3U"
-            }
-            "toast_no_m3u" -> when (currentLang) {
-                "az" -> "M3U linki daxil edilməyib"
-                "en" -> "No M3U URL provided"
-                "de" -> "Keine M3U-URL angegeben"
-                else -> "M3U ссылка не введена"
-            }
-            "toast_invalid_epg" -> when (currentLang) {
-                "az" -> "Düzgün EPG URL daxil edin"
-                "en" -> "Enter valid EPG URL"
-                "de" -> "Gültige EPG-URL eingeben"
-                else -> "Введите правильный URL EPG"
-            }
-            "toast_no_epg" -> when (currentLang) {
-                "az" -> "EPG linki daxil edilməyib"
-                "en" -> "No EPG URL provided"
-                "de" -> "Keine EPG-URL angegeben"
-                else -> "EPG ссылка не введена"
-            }
-            "error_stream" -> when (currentLang) {
-                "az" -> "Yayım xətası"
-                "en" -> "Playback error"
-                "de" -> "Wiedergabefehler"
-                else -> "Ошибка воспроизведения"
-            }
-            "update_checking" -> when (currentLang) {
-                "az" -> "Yeniləmə yoxlanılır..."
-                "en" -> "Checking for update..."
-                "de" -> "Update wird gesucht..."
-                else -> "Проверка обновления..."
-            }
-            "update_conn_fail" -> when (currentLang) {
-                "az" -> "Serverə qoşulmaq olmadı"
-                "en" -> "Server connection failed"
-                "de" -> "Serververbindung fehlgeschlagen"
-                else -> "Не удалось подключиться к серверу"
-            }
-            "update_not_found" -> when (currentLang) {
-                "az" -> "Yeniləmə tapılmadı"
-                "en" -> "Update not found"
-                "de" -> "Kein Update gefunden"
-                else -> "Обновление не найдено"
-            }
-            "update_empty" -> when (currentLang) {
-                "az" -> "Fayl boşdur"
-                "en" -> "File is empty"
-                "de" -> "Datei ist leer"
-                else -> "Файл пуст"
-            }
-            "update_downloading" -> when (currentLang) {
-                "az" -> "Yüklənir..."
-                "en" -> "Downloading..."
-                "de" -> "Wird heruntergeladen..."
-                else -> "Загрузка..."
-            }
-            "update_ready" -> when (currentLang) {
-                "az" -> "Yükləndi! Quraşdırılır..."
-                "en" -> "Downloaded! Installing..."
-                "de" -> "Heruntergeladen! Wird installiert..."
-                else -> "Загружено! Установка..."
-            }
-            else -> ""
+            tvUpdateStatus.text = "Ошибка: ${e.message}"
         }
     }
 
@@ -642,7 +382,7 @@ class MainActivity : AppCompatActivity() {
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, getLocalizedText("error_stream"), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "Ошибка воспроизведения", Toast.LENGTH_SHORT).show()
                     }
                 }
             })
@@ -813,8 +553,8 @@ class MainActivity : AppCompatActivity() {
             favoriteUrls.add(channel.streamUrl)
         }
         saveFavorites()
-        if (selectedCategory == getFavoritesCategoryName()) {
-            filterChannels(getFavoritesCategoryName())
+        if (selectedCategory == "Избранное") {
+            filterChannels("Избранное")
         } else if (currentFocusPos != -1) {
             recyclerViewChannels.adapter?.notifyItemChanged(currentFocusPos)
         }
@@ -874,7 +614,6 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         tvUpdateStatus.visibility = View.GONE
-        updateAllFlagsBackground()
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveM3u.requestFocus()
     }
@@ -902,10 +641,8 @@ class MainActivity : AppCompatActivity() {
         isM3uLoading = true
         runOnUiThread { 
             showSyncCard()
-            val chTxt = when (currentLang) { "az" -> "Kanallar"; "en" -> "Channels"; "de" -> "Kanäle"; else -> "Каналы" }
-            val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
-            tvSyncChannels.text = "$chTxt: 0"
-            tvSyncLogos.text = "$logoTxt: 0"
+            tvSyncChannels.text = "Каналы: 0"
+            tvSyncLogos.text = "Логотипы: 0"
         }
 
         val client = OkHttpClient.Builder()
@@ -927,7 +664,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 isM3uLoading = false
                 runOnUiThread {
-                    tvSyncChannels.text = "Channels: Xəta"
+                    tvSyncChannels.text = "Каналы: Ошибка"
                     if (allChannels.isEmpty()) {
                         showSettingsDialog()
                     }
@@ -939,7 +676,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     isM3uLoading = false
                     runOnUiThread {
-                        tvSyncChannels.text = "Channels: Xəta ${response.code}"
+                        tvSyncChannels.text = "Каналы: Ошибка ${response.code}"
                         if (allChannels.isEmpty()) {
                             showSettingsDialog()
                         }
@@ -968,17 +705,14 @@ class MainActivity : AppCompatActivity() {
                 val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
 
                 runOnUiThread {
-                    val chTxt = when (currentLang) { "az" -> "Kanallar"; "en" -> "Channels"; "de" -> "Kanäle"; else -> "Каналы" }
-                    val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
-                    tvSyncChannels.text = "$chTxt: ${allChannels.size}"
-                    tvSyncLogos.text = "$logoTxt: $logosCount"
+                    tvSyncChannels.text = "Каналы: ${allChannels.size}"
+                    tvSyncLogos.text = "Логотипы: $logosCount"
                     checkAndScheduleHideSyncCard()
                 }
 
                 runOnUiThread {
                     setupCategoryAdapter()
-                    val allCatName = getAllCategoryName()
-                    val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else allCatName
+                    val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
                     filterChannels(catToSelect)
 
                     if (allChannels.isNotEmpty()) {
@@ -1011,8 +745,8 @@ class MainActivity : AppCompatActivity() {
 
         val tempChannels = mutableListOf<Channel>()
         val tempCategories = LinkedHashSet<String>()
-        tempCategories.add(getAllCategoryName())
-        tempCategories.add(getFavoritesCategoryName())
+        tempCategories.add("Все")
+        tempCategories.add("Избранное")
 
         val groupRegex = Regex("""group-title\s*=\s*["']?([^"',\r\n]+)["']?""", RegexOption.IGNORE_CASE)
         val logoRegex = Regex("""(?:tvg-logo|logo)\s*=\s*["']?([^"',\s\r\n]+)["']?""", RegexOption.IGNORE_CASE)
@@ -1089,8 +823,7 @@ class MainActivity : AppCompatActivity() {
         isEpgLoading = true
         runOnUiThread {
             showSyncCard()
-            val progTxt = when (currentLang) { "az" -> "Proqramlar"; "en" -> "Programs"; "de" -> "Sendungen"; else -> "Программы" }
-            tvSyncPrograms.text = "$progTxt: 0"
+            tvSyncPrograms.text = "Программы: 0"
         }
 
         val client = OkHttpClient.Builder()
@@ -1112,7 +845,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 isEpgLoading = false
                 runOnUiThread {
-                    tvSyncPrograms.text = "Programs: Xəta"
+                    tvSyncPrograms.text = "Программы: Ошибка"
                     checkAndScheduleHideSyncCard()
                 }
             }
@@ -1121,7 +854,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     isEpgLoading = false
                     runOnUiThread {
-                        tvSyncPrograms.text = "Programs: Xəta ${response.code}"
+                        tvSyncPrograms.text = "Программы: Ошибка ${response.code}"
                         checkAndScheduleHideSyncCard()
                     }
                     return
@@ -1207,8 +940,7 @@ class MainActivity : AppCompatActivity() {
 
                                                 val quickLogoCount = allChannels.count { it.logoUrl.isNotEmpty() }
                                                 runOnUiThread {
-                                                    val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
-                                                    tvSyncLogos.text = "$logoTxt: $quickLogoCount"
+                                                    tvSyncLogos.text = "Логотипы: $quickLogoCount"
                                                     recyclerViewChannels.adapter?.notifyDataSetChanged()
                                                 }
                                             }
@@ -1279,17 +1011,15 @@ class MainActivity : AppCompatActivity() {
                         val finalLogosCount = allChannels.count { it.logoUrl.isNotEmpty() }
 
                         runOnUiThread {
-                            val progTxt = when (currentLang) { "az" -> "Proqramlar"; "en" -> "Programs"; "de" -> "Sendungen"; else -> "Программы" }
-                            val logoTxt = when (currentLang) { "az" -> "Loqolar"; "en" -> "Logotypes"; "de" -> "Logos"; else -> "Логотипы" }
-                            tvSyncPrograms.text = "$progTxt: $parsedCount"
-                            tvSyncLogos.text = "$logoTxt: $finalLogosCount"
+                            tvSyncPrograms.text = "Программы: $parsedCount"
+                            tvSyncLogos.text = "Логотипы: $finalLogosCount"
                             recyclerViewChannels.adapter?.notifyDataSetChanged()
                             if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
                                 showInfoBanner(allChannels[currentPlayingIndex])
                             }
                         }
                     } catch (e: Exception) {
-                        runOnUiThread { tvSyncPrograms.text = "Programs: Xəta" }
+                        runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка" }
                     } finally {
                         isEpgLoading = false
                         try {
@@ -1344,12 +1074,10 @@ class MainActivity : AppCompatActivity() {
     private fun filterChannels(category: String) {
         selectedCategory = category
         displayedChannels.clear()
-        val allCatName = getAllCategoryName()
-        val favCatName = getFavoritesCategoryName()
 
         when (category) {
-            allCatName -> displayedChannels.addAll(allChannels)
-            favCatName -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
+            "Все" -> displayedChannels.addAll(allChannels)
+            "Избранное" -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
             else -> displayedChannels.addAll(allChannels.filter { it.category == category })
         }
         setupChannelAdapter()
@@ -1358,8 +1086,6 @@ class MainActivity : AppCompatActivity() {
     private fun openChannelPanelCenteredOnCurrent() {
         channelPanel.visibility = View.VISIBLE
         categoryPanel.visibility = View.GONE
-        val allCatName = getAllCategoryName()
-        val favCatName = getFavoritesCategoryName()
 
         if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
             filterChannels(selectedCategory)
@@ -1368,11 +1094,11 @@ class MainActivity : AppCompatActivity() {
         }
         val currentChannel = allChannels[currentPlayingIndex]
         val inCurrentCat = when (selectedCategory) {
-            allCatName -> true
-            favCatName -> favoriteUrls.contains(currentChannel.streamUrl)
+            "Все" -> true
+            "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
             else -> currentChannel.category == selectedCategory
         }
-        if (!inCurrentCat) selectedCategory = allCatName
+        if (!inCurrentCat) selectedCategory = "Все"
         filterChannels(selectedCategory)
         focusCurrentChannelCentered()
     }
@@ -1440,12 +1166,10 @@ class MainActivity : AppCompatActivity() {
                 val arrowView = row.getChildAt(2) as TextView
 
                 titleView.text = cat
-                val allCatName = getAllCategoryName()
-                val favCatName = getFavoritesCategoryName()
 
                 iconView.text = when (cat) {
-                    allCatName -> "☰"
-                    favCatName -> "★"
+                    "Все" -> "☰"
+                    "Избранное" -> "★"
                     else -> "•"
                 }
 
@@ -1734,7 +1458,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (backPressCount >= 2) {
-                    Toast.makeText(this, getLocalizedText("exit_prompt"), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Нажмите ещё ${5 - backPressCount} раз(а) для выхода", Toast.LENGTH_SHORT).show()
                 }
 
                 return true
@@ -1792,7 +1516,7 @@ class MainActivity : AppCompatActivity() {
                 playChannelByIndex(foundIndex)
                 numPadPanel.visibility = View.GONE
             } else {
-                Toast.makeText(applicationContext, getLocalizedText("channel_not_found"), Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Канал не найден", Toast.LENGTH_SHORT).show()
                 tvNumpadDisplay.text = "---"
             }
         }
