@@ -1,9 +1,43 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Внешний синий круг -->
     <path
-        android:fillColor="#2979FF"
-        android:pathData="M21,3H3c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5c0,-1.1 -0.9,-2 -2,-2zM21,17H3V5h18v12z" />
+        android:fillColor="#1E88E5"
+        android:pathData="M54,54m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0" />
+
+    <!-- Светлая кольцевая обводка внутри -->
+    <path
+        android:strokeColor="#90CAF9"
+        android:strokeWidth="3.5"
+        android:pathData="M54,54m-44,0a44,44 0,1 1,88 0a44,44 0,1 1,-88 0" />
+
+    <!-- Антенны телевизора -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M43,26 L54,36 L65,26" />
+
+    <!-- Корпус телевизора со скруглёнными углами (белая рамка) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineJoin="round"
+        android:fillColor="#1E88E5"
+        android:pathData="M32,36 h44 a7,7 0 0,1 7,7 v32 a7,7 0 0,1 -7,7 h-44 a7,7 0 0,1 -7,-7 v-32 a7,7 0 0,1 7,-7 z" />
+
+    <!-- Буква 'T' -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,48 h16 v5 h-5.5 v17 h-5 v-17 h-5.5 z" />
+
+    <!-- Буква 'V' -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58,48 h5.2 l3.8,15 l3.8,-15 h5.2 l-6.2,22 h-5.6 z" />
+
 </vector>
