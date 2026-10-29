@@ -869,14 +869,6 @@ class MainActivity : AppCompatActivity() {
 
                 Thread({
                     try {
-                        // 1. Создаем быстрый индекс ключей поиска только для НАШИХ каналов
-                        val myChannelKeys = HashSet<String>()
-                        for (ch in allChannels) {
-                            if (ch.tvgId.isNotEmpty()) myChannelKeys.add(ch.tvgId.lowercase(Locale.ROOT))
-                            myChannelKeys.add(normalizeName(ch.name))
-                            myChannelKeys.add(ch.name.lowercase(Locale.ROOT))
-                        }
-
                         val buffered = BufferedInputStream(bodyStream, 65536)
                         buffered.mark(2)
                         val b1 = buffered.read()
@@ -899,8 +891,8 @@ class MainActivity : AppCompatActivity() {
                         var currentChannelId = ""
                         var inChannel = false
                         var inProgramme = false
-                        var isCurrentProg = false
                         var progChannel = ""
+                        var currentProgTitle = ""
                         var logosDispatched = false
 
                         while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -924,7 +916,6 @@ class MainActivity : AppCompatActivity() {
                                             tempEpgLogos[currentChannelId.lowercase(Locale.ROOT)] = iconSrc
                                         }
                                     } else if (tag.equals("programme", ignoreCase = true)) {
-                                        // При первом теге programme отправляем логотипы
                                         if (!logosDispatched && tempEpgLogos.isNotEmpty()) {
                                             logosDispatched = true
                                             val finalLogos = HashMap<String, String>()
@@ -945,38 +936,13 @@ class MainActivity : AppCompatActivity() {
                                             }
                                         }
 
+                                        inProgramme = true
+                                        currentProgTitle = ""
                                         progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
-                                        val chKey = progChannel.lowercase(Locale.ROOT)
-
-                                        // Если для этого канала программа уже найдена, пропускаем
-                                        if (livePrograms.containsKey(chKey)) {
-                                            inProgramme = false
-                                            isCurrentProg = false
-                                        } else {
-                                            val startStr = parser.getAttributeValue(null, "start") ?: ""
-                                            val stopStr = parser.getAttributeValue(null, "stop") ?: ""
-                                            val startMs = parseXmlTvTime(startStr)
-                                            val stopMs = parseXmlTvTime(stopStr)
-
-                                            // Проверяем: либо передача идет прямо сейчас (+- 30 минут буфер),
-                                            // либо это первая предстоящая передача на ближайшие часы
-                                            val isLiveNow = (startMs > 0 && stopMs > 0 && now >= (startMs - 30 * 60 * 1000L) && now <= (stopMs + 30 * 60 * 1000L))
-                                            val isUpcoming = (startMs > 0 && startMs in now..(now + 12 * 3600 * 1000L))
-
-                                            if (isLiveNow || isUpcoming) {
-                                                inProgramme = true
-                                                isCurrentProg = true
-                                            } else {
-                                                inProgramme = false
-                                                isCurrentProg = false
-                                            }
+                                    } else if (inProgramme && tag.equals("title", ignoreCase = true)) {
+                                        if (currentProgTitle.isEmpty()) {
+                                            currentProgTitle = parser.nextTextSafe().trim()
                                         }
-                                    } else if (inProgramme && isCurrentProg && tag.equals("title", ignoreCase = true)) {
-                                        val titleText = parser.nextTextSafe().trim()
-                                        if (titleText.isNotEmpty() && progChannel.isNotEmpty()) {
-                                            livePrograms[progChannel.lowercase(Locale.ROOT)] = titleText
-                                        }
-                                        isCurrentProg = false
                                     }
                                 }
                                 XmlPullParser.END_TAG -> {
@@ -985,8 +951,16 @@ class MainActivity : AppCompatActivity() {
                                         inChannel = false
                                         currentChannelId = ""
                                     } else if (tag.equals("programme", ignoreCase = true)) {
+                                        if (inProgramme && progChannel.isNotEmpty() && currentProgTitle.isNotEmpty()) {
+                                            val key = progChannel.lowercase(Locale.ROOT)
+                                            // Если для канала еще нет программы, сохраняем первую найденную
+                                            if (!livePrograms.containsKey(key)) {
+                                                livePrograms[key] = currentProgTitle
+                                            }
+                                        }
                                         inProgramme = false
-                                        isCurrentProg = false
+                                        progChannel = ""
+                                        currentProgTitle = ""
                                     }
                                 }
                             }
@@ -1006,7 +980,7 @@ class MainActivity : AppCompatActivity() {
                             applyEpgLogosToChannels()
                         }
 
-                        // Сопоставляем все найденные программы
+                        // Привязка программ ко всем возможным вариантам названий каналов
                         val mappedPrograms = HashMap<String, String>()
                         for ((chId, title) in livePrograms) {
                             mappedPrograms[chId] = title
@@ -1067,28 +1041,10 @@ class MainActivity : AppCompatActivity() {
             .trim()
     }
 
-    // Поддержка всех возможных часовых поясов XMLTV (+0300, +0000, Z или без пояса)
-    private fun parseXmlTvTime(timeStr: String): Long {
-        if (timeStr.length < 14) return 0L
-        val clean = timeStr.trim()
-        return try {
-            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
-                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
-                format.parse(clean)?.time ?: 0L
-            } else {
-                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-                format.timeZone = TimeZone.getDefault()
-                format.parse(clean.substring(0, 14))?.time ?: 0L
-            }
-        } catch (_: Exception) {
-            0L
-        }
-    }
-
     private fun getProgramForChannel(ch: Channel): String {
         if (currentProgramsMap.isEmpty()) return ""
 
-        // 1. Поиск по точному tvg-id
+        // 1. Поиск по tvg-id
         if (ch.tvgId.isNotEmpty()) {
             currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
