@@ -20,12 +20,9 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Настройка Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Принятие лицензий Android SDK
         run: |
-          yes | sdkmanager --licenses || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Подготовка Debug Keystore
         run: |
@@ -38,7 +35,6 @@ jobs:
 
       - name: Сборка APK
         run: |
-          # Ищем gradlew в корне или подпапках
           GRADLEW_PATH=$(find . -name "gradlew" -type f | head -n 1)
           if [ -n "$GRADLEW_PATH" ]; then
             DIR=$(dirname "$GRADLEW_PATH")
