@@ -1,6 +1,63 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.canlitv.app'
+    compileSdk 34
+
     defaultConfig {
         applicationId "com.canlitv.app"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.1"
+
+        // Автоматическое увеличение версии при каждой сборке
+        def buildNumber = project.hasProperty("autoVersionCode") ? project.property("autoVersionCode").toInteger() : 1
+        versionCode buildNumber
+        versionName "1.1.${buildNumber}"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        viewBinding false
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    // ExoPlayer v2 для ТВ потоков
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
+    implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+
+    // OkHttp для загрузки M3U и EPG
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // Glide для логотипов
+    implementation 'com.github.bumptech.glide:glide:4.16.0'
+}
