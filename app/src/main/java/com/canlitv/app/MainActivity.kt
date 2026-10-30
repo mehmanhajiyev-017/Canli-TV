@@ -391,13 +391,19 @@ class MainActivity : AppCompatActivity() {
     private fun initPlayer() {
         if (player == null) {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("Mozilla/5.0")
+                .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(20000)
-                .setReadTimeoutMs(20000)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
 
             val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15000, 50000, 2500, 5000)
+                .setBufferDurationsMs(
+                    1500,
+                    5000,
+                    500,
+                    1000
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
@@ -412,10 +418,15 @@ class MainActivity : AppCompatActivity() {
 
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    runOnUiThread {
-                        Toast.makeText(applicationContext, "Переподключение потока...", Toast.LENGTH_SHORT).show()
+                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                        player?.seekToDefaultPosition()
                         player?.prepare()
                         player?.play()
+                    } else {
+                        handler.postDelayed({
+                            player?.prepare()
+                            player?.play()
+                        }, 1000)
                     }
                 }
             })
@@ -511,7 +522,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
-            fetchEPGDirectly(savedEpg)
+            handler.postDelayed({ fetchEPGDirectly(savedEpg) }, 6000)
         }
 
         startPeriodicSync()
@@ -666,7 +677,7 @@ class MainActivity : AppCompatActivity() {
             hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
             val r = Runnable { syncStatusCard.visibility = View.GONE }
             hideSyncCardRunnable = r
-            handler.postDelayed(r, 8000)
+            handler.postDelayed(r, 6000)
         }
     }
 
@@ -688,8 +699,6 @@ class MainActivity : AppCompatActivity() {
         val request = Request.Builder()
             .url(url)
             .cacheControl(CacheControl.FORCE_NETWORK)
-            .header("Cache-Control", "no-cache, no-store, must-revalidate")
-            .header("Pragma", "no-cache")
             .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
             .build()
 
@@ -853,6 +862,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchEPGDirectly(epgUrl: String) {
+        if (isEpgLoading) return
         isEpgLoading = true
         runOnUiThread {
             showSyncCard()
@@ -863,11 +873,10 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(25, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
             .build()
 
-        // Запрашиваем поток с явным указанием поддержки прямого считывания
         val request = Request.Builder()
             .url(epgUrl)
             .cacheControl(CacheControl.FORCE_NETWORK)
@@ -894,15 +903,21 @@ class MainActivity : AppCompatActivity() {
 
                 Thread({
                     try {
-                        // Надёжное автоопределение Gzip: читаем первые 2 байта через PushbackInputStream
-                        val pushback = PushbackInputStream(BufferedInputStream(bodyStream, 65536), 2)
+                        val myChannelKeys = HashSet<String>()
+                        for (ch in allChannels) {
+                            if (ch.tvgId.isNotEmpty()) myChannelKeys.add(ch.tvgId.lowercase(Locale.ROOT))
+                            myChannelKeys.add(normalizeName(ch.name))
+                            myChannelKeys.add(ch.name.lowercase(Locale.ROOT))
+                        }
+
+                        val pushback = PushbackInputStream(BufferedInputStream(bodyStream, 32768), 2)
                         val b1 = pushback.read()
                         val b2 = pushback.read()
 
                         val inStream: InputStream = if (b1 == 0x1f && b2 == 0x8b) {
                             pushback.unread(b2)
                             pushback.unread(b1)
-                            GZIPInputStream(pushback, 65536)
+                            GZIPInputStream(pushback, 32768)
                         } else {
                             if (b2 != -1) pushback.unread(b2)
                             if (b1 != -1) pushback.unread(b1)
@@ -913,7 +928,6 @@ class MainActivity : AppCompatActivity() {
                         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
                         parser.setInput(inStream, "UTF-8")
 
-                        val now = System.currentTimeMillis()
                         val channelIdToNames = HashMap<String, MutableList<String>>()
                         val livePrograms = HashMap<String, String>()
                         val tempEpgLogos = HashMap<String, String>()
@@ -924,8 +938,7 @@ class MainActivity : AppCompatActivity() {
                         var progTitle = ""
                         var inChannel = false
                         var inProgramme = false
-                        var isCurrentTimeWindow = false
-
+                        var isChannelWanted = false
                         var lastUiUpdate = System.currentTimeMillis()
 
                         var eventType = parser.eventType
@@ -945,19 +958,16 @@ class MainActivity : AppCompatActivity() {
                                             tempEpgLogos[currentChannelId.lowercase(Locale.ROOT)] = iconSrc
                                         }
                                     } else if (currentTag.equals("programme", ignoreCase = true)) {
-                                        inProgramme = true
-                                        progTitle = ""
                                         progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
+                                        val key = progChannel.lowercase(Locale.ROOT)
 
-                                        val startStr = parser.getAttributeValue(null, "start") ?: ""
-                                        val stopStr = parser.getAttributeValue(null, "stop") ?: ""
-                                        val startMs = parseXmlTvTime(startStr)
-                                        val stopMs = parseXmlTvTime(stopStr)
-
-                                        isCurrentTimeWindow = if (startMs > 0 && stopMs > 0) {
-                                            now in (startMs - 5 * 60 * 1000L)..(stopMs + 5 * 60 * 1000L)
+                                        if (myChannelKeys.contains(key) && !livePrograms.containsKey(key)) {
+                                            inProgramme = true
+                                            isChannelWanted = true
+                                            progTitle = ""
                                         } else {
-                                            true
+                                            inProgramme = false
+                                            isChannelWanted = false
                                         }
                                     }
                                 }
@@ -966,8 +976,11 @@ class MainActivity : AppCompatActivity() {
                                     val text = parser.text?.trim() ?: ""
                                     if (text.isNotEmpty()) {
                                         if (inChannel && currentTag.equals("display-name", ignoreCase = true) && currentChannelId.isNotEmpty()) {
-                                            channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }.add(text)
-                                        } else if (inProgramme && currentTag.equals("title", ignoreCase = true) && progTitle.isEmpty()) {
+                                            val list = channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }
+                                            list.add(text)
+                                            myChannelKeys.add(normalizeName(text))
+                                            myChannelKeys.add(text.lowercase(Locale.ROOT))
+                                        } else if (inProgramme && isChannelWanted && currentTag.equals("title", ignoreCase = true) && progTitle.isEmpty()) {
                                             progTitle = text
                                         }
                                     }
@@ -979,14 +992,11 @@ class MainActivity : AppCompatActivity() {
                                         inChannel = false
                                         currentChannelId = ""
                                     } else if (endTag.equals("programme", ignoreCase = true)) {
-                                        if (inProgramme && progChannel.isNotEmpty() && progTitle.isNotEmpty()) {
-                                            val key = progChannel.lowercase(Locale.ROOT)
-                                            if (isCurrentTimeWindow || !livePrograms.containsKey(key)) {
-                                                livePrograms[key] = progTitle
-                                            }
+                                        if (inProgramme && isChannelWanted && progChannel.isNotEmpty() && progTitle.isNotEmpty()) {
+                                            livePrograms[progChannel.lowercase(Locale.ROOT)] = progTitle
                                         }
                                         inProgramme = false
-                                        isCurrentTimeWindow = false
+                                        isChannelWanted = false
                                         progChannel = ""
                                         progTitle = ""
                                     }
@@ -994,22 +1004,20 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
 
-                            // Обновляем счётчик в реальном времени каждые 1.5 секунды, чтобы было видно прогресс
                             val timeNow = System.currentTimeMillis()
-                            if (timeNow - lastUiUpdate > 1500) {
+                            if (timeNow - lastUiUpdate > 2000) {
                                 lastUiUpdate = timeNow
-                                val currentLogos = tempEpgLogos.size
-                                val currentProg = livePrograms.size
+                                val cLogos = tempEpgLogos.size
+                                val cProg = livePrograms.size
                                 runOnUiThread {
-                                    tvSyncLogos.text = "Логотипы: $currentLogos"
-                                    tvSyncPrograms.text = "Программы: $currentProg"
+                                    tvSyncLogos.text = "Логотипы: $cLogos"
+                                    tvSyncPrograms.text = "Программы: $cProg"
                                 }
                             }
 
                             eventType = parser.next()
                         }
 
-                        // Применяем логотипы
                         if (tempEpgLogos.isNotEmpty()) {
                             val finalLogos = HashMap<String, String>()
                             for ((chId, logoUrl) in tempEpgLogos) {
@@ -1023,7 +1031,6 @@ class MainActivity : AppCompatActivity() {
                             applyEpgLogosToChannels()
                         }
 
-                        // Сопоставляем программы
                         val mappedPrograms = HashMap<String, String>()
                         for ((chId, title) in livePrograms) {
                             mappedPrograms[chId] = title
@@ -1056,23 +1063,6 @@ class MainActivity : AppCompatActivity() {
                 }.start()
             }
         })
-    }
-
-    private fun parseXmlTvTime(timeStr: String): Long {
-        if (timeStr.length < 14) return 0L
-        val clean = timeStr.trim()
-        return try {
-            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
-                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
-                format.parse(clean)?.time ?: 0L
-            } else {
-                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-                format.timeZone = detectedTimeZone
-                format.parse(clean.substring(0, 14))?.time ?: 0L
-            }
-        } catch (_: Exception) {
-            0L
-        }
     }
 
     private fun normalizeName(text: String): String {
