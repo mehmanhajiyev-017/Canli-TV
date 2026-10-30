@@ -1,16 +1,10 @@
 package com.canlitv.app
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Xml
@@ -46,8 +40,6 @@ import okhttp3.Response
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import java.io.BufferedInputStream
-import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import java.io.PushbackInputStream
 import java.text.SimpleDateFormat
@@ -83,8 +75,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRefreshM3u: Button
     private lateinit var btnSaveEpg: Button
     private lateinit var btnRefreshEpg: Button
-    private lateinit var btnCheckAppUpdate: Button
-    private lateinit var tvUpdateStatus: TextView
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
     private lateinit var recyclerViewChannels: RecyclerView
@@ -131,42 +121,12 @@ class MainActivity : AppCompatActivity() {
     private var isM3uLoading = false
     private var isEpgLoading = false
 
-    private var downloadId: Long = -1L
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
-
-    private val downloadReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
-            if (id != -1L && id == downloadId) {
-                val dManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                val uri = dManager.getUriForDownloadedFile(downloadId)
-                if (uri != null) {
-                    tvUpdateStatus.setTextColor(Color.parseColor("#4CAF50"))
-                    tvUpdateStatus.text = "Загружено! Установка..."
-
-                    val install = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "application/vnd.android.package-archive")
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    }
-                    startActivity(install)
-                } else {
-                    tvUpdateStatus.setTextColor(Color.parseColor("#FF5252"))
-                    tvUpdateStatus.text = "Файл не найден"
-                }
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(downloadReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), RECEIVER_EXPORTED)
-        } else {
-            registerReceiver(downloadReceiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
-        }
 
         rowDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#33151A22"))
@@ -191,8 +151,6 @@ class MainActivity : AppCompatActivity() {
         btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
         btnSaveEpg = findViewById(R.id.btnSaveEpg)
         btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
-        btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
-        tvUpdateStatus = findViewById(R.id.tvUpdateStatus)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
@@ -330,10 +288,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnCheckAppUpdate.setOnClickListener {
-            checkAndDownloadAppUpdate()
-        }
-
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
         }
@@ -360,34 +314,6 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun checkAndDownloadAppUpdate() {
-        tvUpdateStatus.visibility = View.VISIBLE
-        tvUpdateStatus.setTextColor(Color.parseColor("#2979FF"))
-        tvUpdateStatus.text = "Проверка обновления..."
-
-        val updateUrl = "https://hajiyev.eu/canlitv/app-release.apk"
-
-        try {
-            val dManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val request = DownloadManager.Request(Uri.parse(updateUrl)).apply {
-                setTitle("Canli TV Обновление")
-                setDescription("Загрузка...")
-                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "app-release.apk")
-                setMimeType("application/vnd.android.package-archive")
-            }
-
-            val oldFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "app-release.apk")
-            if (oldFile.exists()) oldFile.delete()
-
-            downloadId = dManager.enqueue(request)
-            tvUpdateStatus.text = "Загрузка..."
-        } catch (e: Exception) {
-            tvUpdateStatus.setTextColor(Color.parseColor("#FF5252"))
-            tvUpdateStatus.text = "Ошибка: ${e.message}"
-        }
-    }
-
     private fun initPlayer() {
         if (player == null) {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -398,10 +324,10 @@ class MainActivity : AppCompatActivity() {
 
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    1500,
-                    5000,
-                    500,
-                    1000
+                    2000,
+                    15000,
+                    1000,
+                    2000
                 )
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
@@ -481,7 +407,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCheckAppUpdate, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             val defaultBtnBg = GradientDrawable().apply {
@@ -522,7 +448,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
-            handler.postDelayed({ fetchEPGDirectly(savedEpg) }, 6000)
+            handler.postDelayed({ fetchEPGDirectly(savedEpg) }, 5000)
         }
 
         startPeriodicSync()
@@ -543,9 +469,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            unregisterReceiver(downloadReceiver)
-        } catch (_: Exception) {}
         player?.release()
         player = null
         stopPeriodicSync()
@@ -657,7 +580,6 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
-        tvUpdateStatus.visibility = View.GONE
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveM3u.requestFocus()
     }
@@ -873,8 +795,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(90, TimeUnit.SECONDS)
+            .connectTimeout(25, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -903,11 +825,16 @@ class MainActivity : AppCompatActivity() {
 
                 Thread({
                     try {
-                        val myChannelKeys = HashSet<String>()
+                        // Карта для быстрого сопоставления: нормализованное имя/ID нашего канала -> список ключей
+                        val ourChannelLookup = HashMap<String, MutableList<String>>()
                         for (ch in allChannels) {
-                            if (ch.tvgId.isNotEmpty()) myChannelKeys.add(ch.tvgId.lowercase(Locale.ROOT))
-                            myChannelKeys.add(normalizeName(ch.name))
-                            myChannelKeys.add(ch.name.lowercase(Locale.ROOT))
+                            val norm = normalizeName(ch.name)
+                            if (norm.isNotEmpty()) {
+                                ourChannelLookup.getOrPut(norm) { mutableListOf() }.add(norm)
+                            }
+                            if (ch.tvgId.isNotEmpty()) {
+                                ourChannelLookup.getOrPut(ch.tvgId.lowercase(Locale.ROOT)) { mutableListOf() }.add(norm)
+                            }
                         }
 
                         val pushback = PushbackInputStream(BufferedInputStream(bodyStream, 32768), 2)
@@ -928,7 +855,10 @@ class MainActivity : AppCompatActivity() {
                         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
                         parser.setInput(inStream, "UTF-8")
 
-                        val channelIdToNames = HashMap<String, MutableList<String>>()
+                        val now = System.currentTimeMillis()
+                        
+                        // ID из XML -> Наш ключ канала
+                        val xmlIdToOurKey = HashMap<String, String>()
                         val livePrograms = HashMap<String, String>()
                         val tempEpgLogos = HashMap<String, String>()
 
@@ -938,7 +868,7 @@ class MainActivity : AppCompatActivity() {
                         var progTitle = ""
                         var inChannel = false
                         var inProgramme = false
-                        var isChannelWanted = false
+                        var isCurrentProgram = false
                         var lastUiUpdate = System.currentTimeMillis()
 
                         var eventType = parser.eventType
@@ -948,26 +878,43 @@ class MainActivity : AppCompatActivity() {
                                     currentTag = parser.name
                                     if (currentTag.equals("channel", ignoreCase = true)) {
                                         inChannel = true
-                                        currentChannelId = parser.getAttributeValue(null, "id")?.trim() ?: ""
-                                        if (currentChannelId.isNotEmpty()) {
-                                            channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }
+                                        currentChannelId = parser.getAttributeValue(null, "id")?.trim()?.lowercase(Locale.ROOT) ?: ""
+                                        
+                                        // Если ID канала из XML прямо совпадает с нашим tvgId
+                                        if (currentChannelId.isNotEmpty() && ourChannelLookup.containsKey(currentChannelId)) {
+                                            val ourKey = ourChannelLookup[currentChannelId]?.firstOrNull() ?: currentChannelId
+                                            xmlIdToOurKey[currentChannelId] = ourKey
                                         }
                                     } else if (inChannel && currentTag.equals("icon", ignoreCase = true)) {
                                         val iconSrc = parser.getAttributeValue(null, "src")?.trim() ?: ""
                                         if (iconSrc.isNotEmpty() && currentChannelId.isNotEmpty()) {
-                                            tempEpgLogos[currentChannelId.lowercase(Locale.ROOT)] = iconSrc
+                                            tempEpgLogos[currentChannelId] = iconSrc
+                                            xmlIdToOurKey[currentChannelId]?.let { ourKey ->
+                                                tempEpgLogos[ourKey] = iconSrc
+                                            }
                                         }
                                     } else if (currentTag.equals("programme", ignoreCase = true)) {
-                                        progChannel = parser.getAttributeValue(null, "channel")?.trim() ?: ""
-                                        val key = progChannel.lowercase(Locale.ROOT)
+                                        progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
+                                        
+                                        val ourKey = xmlIdToOurKey[progChannel]
+                                        if (ourKey != null && !livePrograms.containsKey(ourKey)) {
+                                            val startStr = parser.getAttributeValue(null, "start") ?: ""
+                                            val stopStr = parser.getAttributeValue(null, "stop") ?: ""
+                                            val startMs = parseXmlTvTime(startStr)
+                                            val stopMs = parseXmlTvTime(stopStr)
 
-                                        if (myChannelKeys.contains(key) && !livePrograms.containsKey(key)) {
-                                            inProgramme = true
-                                            isChannelWanted = true
-                                            progTitle = ""
+                                            // Передача идёт сейчас (с запасом 15 минут)
+                                            if (startMs > 0 && stopMs > 0 && now in (startMs - 15 * 60 * 1000L)..(stopMs + 15 * 60 * 1000L)) {
+                                                inProgramme = true
+                                                isCurrentProgram = true
+                                                progTitle = ""
+                                            } else {
+                                                inProgramme = false
+                                                isCurrentProgram = false
+                                            }
                                         } else {
                                             inProgramme = false
-                                            isChannelWanted = false
+                                            isCurrentProgram = false
                                         }
                                     }
                                 }
@@ -976,11 +923,12 @@ class MainActivity : AppCompatActivity() {
                                     val text = parser.text?.trim() ?: ""
                                     if (text.isNotEmpty()) {
                                         if (inChannel && currentTag.equals("display-name", ignoreCase = true) && currentChannelId.isNotEmpty()) {
-                                            val list = channelIdToNames.getOrPut(currentChannelId.lowercase(Locale.ROOT)) { mutableListOf() }
-                                            list.add(text)
-                                            myChannelKeys.add(normalizeName(text))
-                                            myChannelKeys.add(text.lowercase(Locale.ROOT))
-                                        } else if (inProgramme && isChannelWanted && currentTag.equals("title", ignoreCase = true) && progTitle.isEmpty()) {
+                                            val norm = normalizeName(text)
+                                            if (ourChannelLookup.containsKey(norm)) {
+                                                xmlIdToOurKey[currentChannelId] = norm
+                                                tempEpgLogos[currentChannelId]?.let { tempEpgLogos[norm] = it }
+                                            }
+                                        } else if (inProgramme && isCurrentProgram && currentTag.equals("title", ignoreCase = true) && progTitle.isEmpty()) {
                                             progTitle = text
                                         }
                                     }
@@ -992,11 +940,15 @@ class MainActivity : AppCompatActivity() {
                                         inChannel = false
                                         currentChannelId = ""
                                     } else if (endTag.equals("programme", ignoreCase = true)) {
-                                        if (inProgramme && isChannelWanted && progChannel.isNotEmpty() && progTitle.isNotEmpty()) {
-                                            livePrograms[progChannel.lowercase(Locale.ROOT)] = progTitle
+                                        if (inProgramme && isCurrentProgram && progTitle.isNotEmpty()) {
+                                            val ourKey = xmlIdToOurKey[progChannel]
+                                            if (ourKey != null) {
+                                                livePrograms[ourKey] = progTitle
+                                                livePrograms[progChannel] = progTitle
+                                            }
                                         }
                                         inProgramme = false
-                                        isChannelWanted = false
+                                        isCurrentProgram = false
                                         progChannel = ""
                                         progTitle = ""
                                     }
@@ -1005,7 +957,7 @@ class MainActivity : AppCompatActivity() {
                             }
 
                             val timeNow = System.currentTimeMillis()
-                            if (timeNow - lastUiUpdate > 2000) {
+                            if (timeNow - lastUiUpdate > 1500) {
                                 lastUiUpdate = timeNow
                                 val cLogos = tempEpgLogos.size
                                 val cProg = livePrograms.size
@@ -1018,30 +970,15 @@ class MainActivity : AppCompatActivity() {
                             eventType = parser.next()
                         }
 
+                        // Применяем логотипы
                         if (tempEpgLogos.isNotEmpty()) {
-                            val finalLogos = HashMap<String, String>()
-                            for ((chId, logoUrl) in tempEpgLogos) {
-                                finalLogos[chId] = logoUrl
-                                channelIdToNames[chId]?.forEach { name ->
-                                    finalLogos[normalizeName(name)] = logoUrl
-                                    finalLogos[name.lowercase(Locale.ROOT)] = logoUrl
-                                }
-                            }
-                            epgLogosMap.putAll(finalLogos)
+                            epgLogosMap.putAll(tempEpgLogos)
                             applyEpgLogosToChannels()
                         }
 
-                        val mappedPrograms = HashMap<String, String>()
-                        for ((chId, title) in livePrograms) {
-                            mappedPrograms[chId] = title
-                            channelIdToNames[chId]?.forEach { name ->
-                                mappedPrograms[normalizeName(name)] = title
-                                mappedPrograms[name.lowercase(Locale.ROOT)] = title
-                            }
-                        }
-
+                        // Применяем программы к каналам
                         currentProgramsMap.clear()
-                        currentProgramsMap.putAll(mappedPrograms)
+                        currentProgramsMap.putAll(livePrograms)
 
                         runOnUiThread {
                             tvSyncPrograms.text = "Программы: ${currentProgramsMap.size}"
@@ -1058,11 +995,26 @@ class MainActivity : AppCompatActivity() {
                         try { bodyStream.close() } catch (_: Exception) {}
                         runOnUiThread { checkAndScheduleHideSyncCard() }
                     }
-                }, "FastEpgWorker").apply {
-                    priority = Thread.MIN_PRIORITY
-                }.start()
+                }, "FastEpgWorker").start()
             }
         })
+    }
+
+    private fun parseXmlTvTime(timeStr: String): Long {
+        if (timeStr.length < 14) return 0L
+        val clean = timeStr.trim()
+        return try {
+            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
+                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+                format.parse(clean)?.time ?: 0L
+            } else {
+                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                format.timeZone = detectedTimeZone
+                format.parse(clean.substring(0, 14))?.time ?: 0L
+            }
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     private fun normalizeName(text: String): String {
@@ -1075,21 +1027,19 @@ class MainActivity : AppCompatActivity() {
     private fun getProgramForChannel(ch: Channel): String {
         if (currentProgramsMap.isEmpty()) return ""
 
-        if (ch.tvgId.isNotEmpty()) {
-            currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
-        }
-
+        // 1. Поиск по нормализованному имени
         val norm = normalizeName(ch.name)
         if (norm.isNotEmpty()) {
             currentProgramsMap[norm]?.let { return it }
         }
 
-        currentProgramsMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
-
-        val simple = ch.name.lowercase(Locale.ROOT).replace("[^a-z0-9а-я]".toRegex(), "")
-        if (simple.isNotEmpty()) {
-            currentProgramsMap[simple]?.let { return it }
+        // 2. Поиск по tvgId
+        if (ch.tvgId.isNotEmpty()) {
+            currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
+
+        // 3. Поиск по полному имени строчными буквами
+        currentProgramsMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
 
         return ""
     }
