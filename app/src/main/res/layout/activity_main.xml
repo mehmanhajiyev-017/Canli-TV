@@ -13,7 +13,7 @@
         app:use_controller="false"
         app:resize_mode="fit" />
 
-    <!-- Status Kartı (Sağ Yuxarı) -->
+    <!-- Карточка синхронизации EPG/M3U -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
@@ -52,7 +52,7 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- Sol Kateqoriyalar Menyusu -->
+    <!-- Боковая панель категорий -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="290dp"
@@ -109,7 +109,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Kanallar Siyahısı Paneli -->
+    <!-- Список каналов -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="390dp"
@@ -126,7 +126,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Aşağı Məlumat Banneri -->
+    <!-- Информационная плашка внизу -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -179,7 +179,7 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Numpad Paneli -->
+    <!-- Цифровая панель переключения -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="210dp"
@@ -220,7 +220,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Yalnız Rus dilində Tənzimləmələr Paneli -->
+    <!-- Панель настроек (без кнопки обновить) -->
     <LinearLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -340,23 +340,13 @@
                     android:textSize="18sp" />
             </LinearLayout>
 
-            <!-- Düymələr Sətri (Dil seçimi tam çıxarılıb) -->
+            <!-- Кнопка закрытия окна настроек -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:gravity="end|center_vertical"
+                android:gravity="end"
                 android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnCheckAppUpdate"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="46dp"
-                    android:layout_marginEnd="10dp"
-                    android:text="🔄 Обновить"
-                    android:textColor="#2979FF"
-                    android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/btnCloseSettings"
@@ -366,17 +356,6 @@
                     android:text="ЗАКРЫТЬ"
                     android:textStyle="bold" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvUpdateStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text=""
-                android:textColor="#4CAF50"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
 
         </LinearLayout>
     </LinearLayout>
