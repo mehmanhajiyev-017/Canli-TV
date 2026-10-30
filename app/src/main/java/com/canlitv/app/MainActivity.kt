@@ -40,6 +40,7 @@ import okhttp3.Response
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import java.io.BufferedInputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.PushbackInputStream
 import java.text.SimpleDateFormat
@@ -825,7 +826,6 @@ class MainActivity : AppCompatActivity() {
 
                 Thread({
                     try {
-                        // Карта для быстрого сопоставления: нормализованное имя/ID нашего канала -> список ключей
                         val ourChannelLookup = HashMap<String, MutableList<String>>()
                         for (ch in allChannels) {
                             val norm = normalizeName(ch.name)
@@ -856,8 +856,6 @@ class MainActivity : AppCompatActivity() {
                         parser.setInput(inStream, "UTF-8")
 
                         val now = System.currentTimeMillis()
-                        
-                        // ID из XML -> Наш ключ канала
                         val xmlIdToOurKey = HashMap<String, String>()
                         val livePrograms = HashMap<String, String>()
                         val tempEpgLogos = HashMap<String, String>()
@@ -880,7 +878,6 @@ class MainActivity : AppCompatActivity() {
                                         inChannel = true
                                         currentChannelId = parser.getAttributeValue(null, "id")?.trim()?.lowercase(Locale.ROOT) ?: ""
                                         
-                                        // Если ID канала из XML прямо совпадает с нашим tvgId
                                         if (currentChannelId.isNotEmpty() && ourChannelLookup.containsKey(currentChannelId)) {
                                             val ourKey = ourChannelLookup[currentChannelId]?.firstOrNull() ?: currentChannelId
                                             xmlIdToOurKey[currentChannelId] = ourKey
@@ -903,7 +900,6 @@ class MainActivity : AppCompatActivity() {
                                             val startMs = parseXmlTvTime(startStr)
                                             val stopMs = parseXmlTvTime(stopStr)
 
-                                            // Передача идёт сейчас (с запасом 15 минут)
                                             if (startMs > 0 && stopMs > 0 && now in (startMs - 15 * 60 * 1000L)..(stopMs + 15 * 60 * 1000L)) {
                                                 inProgramme = true
                                                 isCurrentProgram = true
@@ -970,13 +966,11 @@ class MainActivity : AppCompatActivity() {
                             eventType = parser.next()
                         }
 
-                        // Применяем логотипы
                         if (tempEpgLogos.isNotEmpty()) {
                             epgLogosMap.putAll(tempEpgLogos)
                             applyEpgLogosToChannels()
                         }
 
-                        // Применяем программы к каналам
                         currentProgramsMap.clear()
                         currentProgramsMap.putAll(livePrograms)
 
@@ -1027,18 +1021,15 @@ class MainActivity : AppCompatActivity() {
     private fun getProgramForChannel(ch: Channel): String {
         if (currentProgramsMap.isEmpty()) return ""
 
-        // 1. Поиск по нормализованному имени
         val norm = normalizeName(ch.name)
         if (norm.isNotEmpty()) {
             currentProgramsMap[norm]?.let { return it }
         }
 
-        // 2. Поиск по tvgId
         if (ch.tvgId.isNotEmpty()) {
             currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
         }
 
-        // 3. Поиск по полному имени строчными буквами
         currentProgramsMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
 
         return ""
