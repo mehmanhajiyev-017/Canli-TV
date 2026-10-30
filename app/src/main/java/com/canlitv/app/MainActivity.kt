@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.util.Xml
 import android.view.KeyEvent
 import android.view.View
@@ -116,10 +117,6 @@ class MainActivity : AppCompatActivity() {
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
     private var hideSyncCardRunnable: Runnable? = null
-    private var maxSyncTimeoutRunnable: Runnable? = null
-
-    private var periodicSyncRunnable: Runnable? = null
-    private val SYNC_INTERVAL_MS = 60 * 60 * 1000L
 
     private var isM3uLoading = false
     private var isEpgLoading = false
@@ -241,7 +238,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
-        recyclerViewChannels.setItemViewCacheSize(30)
+        recyclerViewChannels.setItemViewCacheSize(25)
 
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
@@ -302,8 +299,8 @@ class MainActivity : AppCompatActivity() {
         Thread {
             try {
                 val client = OkHttpClient.Builder()
-                    .connectTimeout(5, TimeUnit.SECONDS)
-                    .readTimeout(5, TimeUnit.SECONDS)
+                    .connectTimeout(4, TimeUnit.SECONDS)
+                    .readTimeout(4, TimeUnit.SECONDS)
                     .build()
                 val req = Request.Builder().url("http://ip-api.com/json/").build()
                 val resp = client.newCall(req).execute()
@@ -328,7 +325,12 @@ class MainActivity : AppCompatActivity() {
                 .setReadTimeoutMs(15000)
 
             val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(2500, 15000, 1000, 2000)
+                .setBufferDurationsMs(
+                    2000,
+                    15000,
+                    1000,
+                    2000
+                )
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
@@ -448,10 +450,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
-            handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 5000)
+            handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
         }
-
-        startPeriodicSync()
     }
 
     override fun onPause() {
@@ -464,41 +464,13 @@ class MainActivity : AppCompatActivity() {
         player?.stop()
         player?.release()
         player = null
-        stopPeriodicSync()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         player?.release()
         player = null
-        stopPeriodicSync()
         handler.removeCallbacksAndMessages(null)
-    }
-
-    private fun startPeriodicSync() {
-        stopPeriodicSync()
-        val r = object : Runnable {
-            override fun run() {
-                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                val m3u = prefs.getString("M3U_URL", "") ?: ""
-                val epg = prefs.getString("EPG_URL", "") ?: ""
-
-                if (m3u.isNotEmpty()) {
-                    fetchM3U(m3u, autoPlay = false)
-                }
-                if (epg.isNotEmpty() && epg.startsWith("http")) {
-                    downloadAndParseEpg(epg)
-                }
-                handler.postDelayed(this, SYNC_INTERVAL_MS)
-            }
-        }
-        periodicSyncRunnable = r
-        handler.postDelayed(r, SYNC_INTERVAL_MS)
-    }
-
-    private fun stopPeriodicSync() {
-        periodicSyncRunnable?.let { handler.removeCallbacks(it) }
-        periodicSyncRunnable = null
     }
 
     private fun loadFavorites() {
@@ -587,11 +559,6 @@ class MainActivity : AppCompatActivity() {
     private fun showSyncCard() {
         syncStatusCard.visibility = View.VISIBLE
         hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
-
-        maxSyncTimeoutRunnable?.let { handler.removeCallbacks(it) }
-        val rTimeout = Runnable { syncStatusCard.visibility = View.GONE }
-        maxSyncTimeoutRunnable = rTimeout
-        handler.postDelayed(rTimeout, 600000)
     }
 
     private fun checkAndScheduleHideSyncCard() {
@@ -599,7 +566,7 @@ class MainActivity : AppCompatActivity() {
             hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
             val r = Runnable { syncStatusCard.visibility = View.GONE }
             hideSyncCardRunnable = r
-            handler.postDelayed(r, 6000)
+            handler.postDelayed(r, 4000)
         }
     }
 
@@ -642,7 +609,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful || body == null) {
                     isM3uLoading = false
                     runOnUiThread {
-                        tvSyncChannels.text = "Каналы: Ошибка ${response.code}"
+                        tvSyncChannels.text = "Каналы: Ошибка"
                         if (allChannels.isEmpty()) {
                             showSettingsDialog()
                         }
@@ -786,16 +753,15 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    // Сохранение EPG на диск и быстрый локальный парсинг
     private fun downloadAndParseEpg(epgUrl: String) {
         if (isEpgLoading) return
         isEpgLoading = true
 
         val cacheFile = File(cacheDir, "epg_cache.gz")
 
-        // Если кэш скачан менее 12 часов назад, читаем сразу с диска
-        if (cacheFile.exists() && (System.currentTimeMillis() - cacheFile.lastModified() < 12 * 3600 * 1000L)) {
+        if (cacheFile.exists() && (System.currentTimeMillis() - cacheFile.lastModified() < 8 * 3600 * 1000L)) {
             Thread {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
                 parseEpgFromFile(cacheFile)
             }.start()
             return
@@ -822,7 +788,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 isEpgLoading = false
                 runOnUiThread {
-                    tvSyncPrograms.text = "Программы: Ошибка сети"
+                    tvSyncPrograms.text = "Программы: Ошибка"
                     checkAndScheduleHideSyncCard()
                 }
             }
@@ -836,6 +802,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 Thread {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
                     try {
                         val fos = FileOutputStream(cacheFile)
                         body.byteStream().use { input ->
@@ -864,29 +831,29 @@ class MainActivity : AppCompatActivity() {
     private fun parseEpgFromFile(file: File) {
         try {
             runOnUiThread {
-                tvSyncPrograms.text = "Программы: Чтение..."
+                tvSyncPrograms.text = "Программы: Обработка..."
             }
 
-            val ourChannelLookup = HashMap<String, MutableList<String>>()
+            val ourChannelLookup = HashMap<String, String>()
             for (ch in allChannels) {
                 val norm = normalizeName(ch.name)
                 if (norm.isNotEmpty()) {
-                    ourChannelLookup.getOrPut(norm) { mutableListOf() }.add(norm)
+                    ourChannelLookup[norm] = norm
                 }
                 if (ch.tvgId.isNotEmpty()) {
-                    ourChannelLookup.getOrPut(ch.tvgId.lowercase(Locale.ROOT)) { mutableListOf() }.add(norm)
+                    ourChannelLookup[ch.tvgId.lowercase(Locale.ROOT)] = norm
                 }
             }
 
             val fis = FileInputStream(file)
-            val bis = BufferedInputStream(fis, 65536)
+            val bis = BufferedInputStream(fis, 32768)
             bis.mark(2)
             val b1 = bis.read()
             val b2 = bis.read()
             bis.reset()
 
             val inStream: InputStream = if (b1 == 0x1f && b2 == 0x8b) {
-                GZIPInputStream(bis, 65536)
+                GZIPInputStream(bis, 32768)
             } else {
                 bis
             }
@@ -907,7 +874,6 @@ class MainActivity : AppCompatActivity() {
             var inChannel = false
             var inProgramme = false
             var isCurrentProgram = false
-            var lastUiUpdate = System.currentTimeMillis()
 
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -918,8 +884,7 @@ class MainActivity : AppCompatActivity() {
                             inChannel = true
                             currentChannelId = parser.getAttributeValue(null, "id")?.trim()?.lowercase(Locale.ROOT) ?: ""
                             if (currentChannelId.isNotEmpty() && ourChannelLookup.containsKey(currentChannelId)) {
-                                val ourKey = ourChannelLookup[currentChannelId]?.firstOrNull() ?: currentChannelId
-                                xmlIdToOurKey[currentChannelId] = ourKey
+                                xmlIdToOurKey[currentChannelId] = ourChannelLookup[currentChannelId] ?: currentChannelId
                             }
                         } else if (inChannel && currentTag.equals("icon", ignoreCase = true)) {
                             val iconSrc = parser.getAttributeValue(null, "src")?.trim() ?: ""
@@ -990,18 +955,6 @@ class MainActivity : AppCompatActivity() {
                         currentTag = ""
                     }
                 }
-
-                val timeNow = System.currentTimeMillis()
-                if (timeNow - lastUiUpdate > 1500) {
-                    lastUiUpdate = timeNow
-                    val cLogos = tempEpgLogos.size
-                    val cProg = livePrograms.size
-                    runOnUiThread {
-                        tvSyncLogos.text = "Логотипы: $cLogos"
-                        tvSyncPrograms.text = "Программы: $cProg"
-                    }
-                }
-
                 eventType = parser.next()
             }
 
