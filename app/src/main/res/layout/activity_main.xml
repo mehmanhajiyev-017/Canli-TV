@@ -13,14 +13,64 @@
         android:focusable="false"
         app:use_controller="false" />
 
+    <!-- Mobil Yuxarı İdarəetmə Paneli (Yalnız mobil rejimdə və ekrana toxunduqda görünür) -->
+    <LinearLayout
+        android:id="@+id/mobileTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_alignParentTop="true"
+        android:background="#CC0B0E14"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/btnMobileCategories"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:background="#33FFFFFF"
+            android:text="📁 Группы"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnMobileChannels"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="#33FFFFFF"
+            android:text="📺 Каналы"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/btnMobileSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:background="#33FFFFFF"
+            android:text="⚙ Настройки"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
-        android:layout_marginTop="24dp"
-        android:layout_marginEnd="24dp"
+        android:layout_marginTop="64dp"
+        android:layout_marginEnd="16dp"
         android:orientation="vertical"
         android:padding="16dp"
         android:visibility="gone">
@@ -29,7 +79,7 @@
             android:id="@+id/tvSyncChannels"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Kanallar: 0"
+            android:text="Каналы: 0"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -39,7 +89,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Loqolar: 0"
+            android:text="Логотипы: 0"
             android:textColor="#B0BEC5"
             android:textSize="14sp" />
 
@@ -48,17 +98,18 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Proqramlar: 0"
+            android:text="Программы: 0"
             android:textColor="#B0BEC5"
             android:textSize="14sp" />
     </LinearLayout>
 
+    <!-- Qruplar / Kateqoriyalar Paneli -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="320dp"
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
-        android:background="#E60B0E14"
+        android:background="#F20B0E14"
         android:orientation="vertical"
         android:padding="16dp"
         android:visibility="gone">
@@ -67,7 +118,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            android:text="Kateqoriyalar"
+            android:text="Группы каналов"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -101,19 +152,20 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:text="Tənzimləmələr"
+                android:text="Настройки"
                 android:textColor="#ECEFF1"
                 android:textSize="16sp"
                 android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Kanallar Paneli -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="420dp"
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
-        android:background="#F00B0E14"
+        android:background="#F70B0E14"
         android:orientation="vertical"
         android:padding="12dp"
         android:visibility="gone">
@@ -124,15 +176,16 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
+    <!-- İnfo Banner -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:layout_margin="24dp"
-        android:background="#D90B0E14"
+        android:layout_margin="16dp"
+        android:background="#E60B0E14"
         android:orientation="vertical"
-        android:padding="18dp"
+        android:padding="16dp"
         android:visibility="gone">
 
         <LinearLayout
@@ -145,17 +198,17 @@
                 android:id="@+id/tvBannerNumber"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="16dp"
+                android:layout_marginEnd="14dp"
                 android:text="1"
                 android:textColor="#2979FF"
-                android:textSize="28sp"
+                android:textSize="26sp"
                 android:textStyle="bold" />
 
             <ImageView
                 android:id="@+id/imgBannerLogo"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginEnd="16dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:layout_marginEnd="14dp"
                 android:scaleType="fitCenter"
                 android:visibility="gone" />
 
@@ -164,9 +217,9 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Kanal Adı"
+                android:text="Имя канала"
                 android:textColor="#FFFFFF"
-                android:textSize="22sp"
+                android:textSize="20sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -174,19 +227,20 @@
             android:id="@+id/tvBannerCategory"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Kateqoriya"
+            android:layout_marginTop="4dp"
+            android:text="Группа"
             android:textColor="#B0BEC5"
-            android:textSize="16sp" />
+            android:textSize="15sp" />
     </LinearLayout>
 
+    <!-- Rəqəmsal Pult Paneli -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="260dp"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
         android:layout_centerVertical="true"
-        android:layout_marginEnd="24dp"
+        android:layout_marginEnd="20dp"
         android:orientation="vertical"
         android:padding="16dp"
         android:visibility="gone">
@@ -208,24 +262,25 @@
             android:columnCount="3"
             android:rowCount="4">
 
-            <Button android:id="@+id/btn1" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="1" android:textSize="18sp" />
-            <Button android:id="@+id/btn2" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="2" android:textSize="18sp" />
-            <Button android:id="@+id/btn3" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="3" android:textSize="18sp" />
+            <Button android:id="@+id/btn1" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="1" android:textSize="18sp" />
+            <Button android:id="@+id/btn2" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="2" android:textSize="18sp" />
+            <Button android:id="@+id/btn3" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="3" android:textSize="18sp" />
 
-            <Button android:id="@+id/btn4" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="4" android:textSize="18sp" />
-            <Button android:id="@+id/btn5" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="5" android:textSize="18sp" />
-            <Button android:id="@+id/btn6" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="6" android:textSize="18sp" />
+            <Button android:id="@+id/btn4" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="4" android:textSize="18sp" />
+            <Button android:id="@+id/btn5" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="5" android:textSize="18sp" />
+            <Button android:id="@+id/btn6" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="6" android:textSize="18sp" />
 
-            <Button android:id="@+id/btn7" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="7" android:textSize="18sp" />
-            <Button android:id="@+id/btn8" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="8" android:textSize="18sp" />
-            <Button android:id="@+id/btn9" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="9" android:textSize="18sp" />
+            <Button android:id="@+id/btn7" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="7" android:textSize="18sp" />
+            <Button android:id="@+id/btn8" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="8" android:textSize="18sp" />
+            <Button android:id="@+id/btn9" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="9" android:textSize="18sp" />
 
-            <Button android:id="@+id/btnClear" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="C" android:textColor="#FF5252" android:textSize="18sp" />
-            <Button android:id="@+id/btn0" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="0" android:textSize="18sp" />
-            <Button android:id="@+id/btnGo" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="52dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:text="OK" android:textColor="#4CAF50" android:textSize="18sp" />
+            <Button android:id="@+id/btnClear" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="C" android:textColor="#FF5252" android:textSize="18sp" />
+            <Button android:id="@+id/btn0" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="0" android:textSize="18sp" />
+            <Button android:id="@+id/btnGo" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="50dp" android:layout_columnWeight="1" android:layout_margin="2dp" android:text="OK" android:textColor="#4CAF50" android:textSize="18sp" />
         </GridLayout>
     </LinearLayout>
 
+    <!-- Tənzimləmələr Pəncərəsi -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -237,17 +292,17 @@
         android:visibility="gone">
 
         <LinearLayout
-            android:layout_width="650dp"
+            android:layout_width="600dp"
             android:layout_height="wrap_content"
             android:background="#1B222E"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:padding="22dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                android:text="Tənzimləmələr"
+                android:text="Настройки приложения"
                 android:textColor="#FFFFFF"
                 android:textSize="22sp"
                 android:textStyle="bold" />
@@ -255,7 +310,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="1. M3U Playlist Linki:"
+                android:text="1. Ссылка на плейлист M3U:"
                 android:textColor="#B0BEC5"
                 android:textSize="14sp" />
 
@@ -279,11 +334,11 @@
 
                 <Button
                     android:id="@+id/btnSaveM3u"
-                    android:layout_width="72dp"
+                    android:layout_width="95dp"
                     android:layout_height="50dp"
                     android:layout_marginStart="8dp"
-                    android:text="YADDA"
-                    android:textSize="12sp"
+                    android:text="СОХРАНИТЬ"
+                    android:textSize="11sp"
                     android:textStyle="bold" />
 
                 <Button
@@ -298,7 +353,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="2. EPG Proqram Linki (.xml / .gz):"
+                android:text="2. Ссылка на EPG телегид (.xml / .gz):"
                 android:textColor="#B0BEC5"
                 android:textSize="14sp" />
 
@@ -322,11 +377,11 @@
 
                 <Button
                     android:id="@+id/btnSaveEpg"
-                    android:layout_width="72dp"
+                    android:layout_width="95dp"
                     android:layout_height="50dp"
                     android:layout_marginStart="8dp"
-                    android:text="YADDA"
-                    android:textSize="12sp"
+                    android:text="СОХРАНИТЬ"
+                    android:textSize="11sp"
                     android:textStyle="bold" />
 
                 <Button
@@ -341,14 +396,14 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="10dp"
                 android:gravity="end|center_vertical"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/btnToggleMode"
                     android:layout_width="56dp"
-                    android:layout_height="52dp"
+                    android:layout_height="50dp"
                     android:layout_marginEnd="12dp"
                     android:clickable="true"
                     android:focusable="true"
@@ -358,12 +413,12 @@
                 <Button
                     android:id="@+id/btnCloseSettings"
                     android:layout_width="wrap_content"
-                    android:layout_height="52dp"
+                    android:layout_height="50dp"
                     android:clickable="true"
                     android:focusable="true"
                     android:paddingStart="24dp"
                     android:paddingEnd="24dp"
-                    android:text="BAĞLA"
+                    android:text="ЗАКРЫТЬ"
                     android:textColor="#ECEFF1"
                     android:textSize="15sp"
                     android:textStyle="bold" />
