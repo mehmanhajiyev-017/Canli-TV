@@ -128,26 +128,12 @@ class MainActivity : AppCompatActivity() {
     private var isEpgLoading = false
     private val loadingLock = Any()
 
-    private val playlistClient = OkHttpClient.Builder()
+    private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
-
-    private val epgClient = OkHttpClient.Builder()
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .build()
-
-    private var playerErrorCount = 0
-    private var lastPlayerErrorTime = 0L
 
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
 
@@ -278,7 +264,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
-        recyclerViewChannels.setItemViewCacheSize(15)
+        recyclerViewChannels.setItemViewCacheSize(20)
 
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
@@ -338,12 +324,8 @@ class MainActivity : AppCompatActivity() {
     private fun detectTimezoneByIp() {
         Thread {
             try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(3, TimeUnit.SECONDS)
-                    .readTimeout(3, TimeUnit.SECONDS)
-                    .build()
                 val req = Request.Builder().url("http://ip-api.com/json/").build()
-                val resp = client.newCall(req).execute()
+                val resp = httpClient.newCall(req).execute()
                 val body = resp.body?.string() ?: ""
                 if (resp.isSuccessful && body.isNotEmpty()) {
                     val json = JSONObject(body)
@@ -361,22 +343,15 @@ class MainActivity : AppCompatActivity() {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(10000)
-                .setReadTimeoutMs(10000)
+                .setConnectTimeoutMs(12000)
+                .setReadTimeoutMs(12000)
 
             val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    2500,
-                    12000,
-                    1000,
-                    2000
-                )
+                .setBufferDurationsMs(2500, 15000, 1000, 2000)
                 .build()
 
-            val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
-
             player = ExoPlayer.Builder(this)
-                .setMediaSourceFactory(mediaSourceFactory)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
                 .setLoadControl(loadControl)
                 .build()
 
@@ -385,26 +360,17 @@ class MainActivity : AppCompatActivity() {
 
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastPlayerErrorTime > 30000L) playerErrorCount = 0
-                    lastPlayerErrorTime = now
-                    playerErrorCount++
-
-                    if (playerErrorCount <= 3) {
+                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                        player?.seekToDefaultPosition()
+                        player?.prepare()
+                        player?.play()
+                    } else {
                         handler.postDelayed({
-                            if (!isFinishing && !isDestroyed && player != null) {
+                            if (!isFinishing && player != null) {
                                 player?.prepare()
                                 player?.play()
                             }
-                        }, playerErrorCount * 1500L)
-                    } else {
-                        runOnUiThread {
-                            Toast.makeText(
-                                this@MainActivity,
-                                "Ошибка потока. Попробуйте другой канал.",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
+                        }, 1200)
                     }
                 }
             })
@@ -419,8 +385,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentPlayingIndex = channelIndex
-        playerErrorCount = 0
-        lastPlayerErrorTime = System.currentTimeMillis()
         val channel = allChannels[channelIndex]
 
         getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
@@ -429,10 +393,7 @@ class MainActivity : AppCompatActivity() {
             .apply()
 
         initPlayer()
-        val streamUri = Uri.parse(channel.streamUrl)
-        val mediaItem = MediaItem.fromUri(streamUri)
-
-        player?.setMediaItem(mediaItem)
+        player?.setMediaItem(MediaItem.fromUri(Uri.parse(channel.streamUrl)))
         player?.prepare()
         player?.playWhenReady = true
 
@@ -552,13 +513,8 @@ class MainActivity : AppCompatActivity() {
             btn.background = defaultBtnBg
             btn.setTextColor(Color.parseColor("#ECEFF1"))
             btn.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    btn.background = focusedBtnBg
-                    btn.setTextColor(Color.WHITE)
-                } else {
-                    btn.background = defaultBtnBg
-                    btn.setTextColor(Color.parseColor("#ECEFF1"))
-                }
+                btn.background = if (hasFocus) focusedBtnBg else defaultBtnBg
+                btn.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#ECEFF1"))
             }
         }
 
@@ -612,7 +568,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        playlistClient.newCall(request).enqueue(object : Callback {
+        httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 synchronized(loadingLock) { isM3uLoading = false }
                 runOnUiThread {
@@ -622,22 +578,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                var playlistText: String? = null
-                try {
-                    response.use {
-                        if (it.isSuccessful) {
-                            playlistText = it.body?.string()
-                        }
-                    }
-                } catch (_: Exception) {
-                    playlistText = null
-                }
-
-                val body = playlistText
-                if (body.isNullOrBlank()) {
+                val body = response.body?.string()
+                if (!response.isSuccessful || body.isNullOrBlank()) {
                     synchronized(loadingLock) { isM3uLoading = false }
                     runOnUiThread {
-                        tvSyncChannels.text = "Каналы: Пустой ответ"
+                        tvSyncChannels.text = "Каналы: Ошибка ответа"
                         if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                     }
                     return
@@ -655,6 +600,7 @@ class MainActivity : AppCompatActivity() {
 
                         parseM3ULive(body)
                         applyEpgLogosToChannels()
+
                         val channelCount = allChannels.size
                         val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
 
@@ -682,7 +628,7 @@ class MainActivity : AppCompatActivity() {
 
                                 val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                                 if (savedEpg.startsWith("http")) {
-                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 6000)
                                 }
                             } else {
                                 showSettingsDialog()
@@ -821,57 +767,45 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        epgClient.newCall(request).enqueue(object : Callback {
+        httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 synchronized(loadingLock) { isEpgLoading = false }
-                runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка загрузки" }
+                runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка сети" }
             }
 
             override fun onResponse(call: Call, response: Response) {
-                var downloadError = false
+                var success = false
                 try {
                     response.use { resp ->
                         val body = resp.body
-                        if (!resp.isSuccessful || body == null) {
-                            downloadError = true
-                        } else {
+                        if (resp.isSuccessful && body != null) {
                             val tempFile = File(cacheDir, "epg_cache.tmp")
-                            try {
-                                body.byteStream().use { input ->
-                                    FileOutputStream(tempFile).use { output ->
-                                        val buffer = ByteArray(64 * 1024)
-                                        while (true) {
-                                            val count = input.read(buffer)
-                                            if (count < 0) break
-                                            output.write(buffer, 0, count)
-                                        }
-                                        output.fd.sync()
+                            body.byteStream().use { input ->
+                                FileOutputStream(tempFile).use { output ->
+                                    val buffer = ByteArray(32768)
+                                    var readBytes: Int
+                                    while (input.read(buffer).also { readBytes = it } != -1) {
+                                        output.write(buffer, 0, readBytes)
                                     }
                                 }
-                                if (tempFile.length() == 0L) throw IOException("Empty EPG")
+                            }
+                            if (tempFile.length() > 0L) {
                                 if (cacheFile.exists()) cacheFile.delete()
-                                if (!tempFile.renameTo(cacheFile)) {
-                                    tempFile.copyTo(cacheFile, overwrite = true)
-                                    tempFile.delete()
-                                }
-                            } catch (e: Exception) {
-                                tempFile.delete()
-                                throw e
+                                tempFile.renameTo(cacheFile)
+                                success = true
                             }
                         }
                     }
-                } catch (_: Exception) {
-                    downloadError = true
-                }
+                } catch (_: Exception) {}
 
-                if (downloadError) {
-                    synchronized(loadingLock) { isEpgLoading = false }
-                    runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка загрузки" }
-                } else {
+                if (success) {
                     Thread {
                         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
                         parseEpgFromFile(cacheFile)
                     }.start()
+                } else {
+                    synchronized(loadingLock) { isEpgLoading = false }
+                    runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка файла" }
                 }
             }
         })
@@ -879,18 +813,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun parseEpgFromFile(file: File) {
         try {
-            runOnUiThread {
-                tvSyncPrograms.text = "Программы: Обработка..."
-            }
+            runOnUiThread { tvSyncPrograms.text = "Программы: Обработка..." }
 
-            val ourChannelLookup = HashMap<String, String>()
+            // Строим быстрый индекс сопоставления каналов
+            val channelLookup = HashMap<String, String>()
             for (ch in allChannels) {
                 val norm = normalizeName(ch.name)
                 if (norm.isNotEmpty()) {
-                    ourChannelLookup[norm] = norm
+                    channelLookup[norm] = norm
                 }
                 if (ch.tvgId.isNotEmpty()) {
-                    ourChannelLookup[ch.tvgId.lowercase(Locale.ROOT)] = norm
+                    channelLookup[ch.tvgId.lowercase(Locale.ROOT)] = norm
                 }
             }
 
@@ -932,8 +865,8 @@ class MainActivity : AppCompatActivity() {
                         if (currentTag.equals("channel", ignoreCase = true)) {
                             inChannel = true
                             currentChannelId = parser.getAttributeValue(null, "id")?.trim()?.lowercase(Locale.ROOT) ?: ""
-                            if (currentChannelId.isNotEmpty() && ourChannelLookup.containsKey(currentChannelId)) {
-                                xmlIdToOurKey[currentChannelId] = ourChannelLookup[currentChannelId] ?: currentChannelId
+                            if (currentChannelId.isNotEmpty() && channelLookup.containsKey(currentChannelId)) {
+                                xmlIdToOurKey[currentChannelId] = channelLookup[currentChannelId] ?: currentChannelId
                             }
                         } else if (inChannel && currentTag.equals("icon", ignoreCase = true)) {
                             val iconSrc = parser.getAttributeValue(null, "src")?.trim() ?: ""
@@ -945,15 +878,16 @@ class MainActivity : AppCompatActivity() {
                             }
                         } else if (currentTag.equals("programme", ignoreCase = true)) {
                             progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
-                            val ourKey = xmlIdToOurKey[progChannel]
+                            val ourKey = xmlIdToOurKey[progChannel] ?: channelLookup[progChannel]
 
+                            // Проверяем только нужные каналы и только если программа для них еще не найдена
                             if (ourKey != null && !livePrograms.containsKey(ourKey)) {
                                 val startStr = parser.getAttributeValue(null, "start") ?: ""
                                 val stopStr = parser.getAttributeValue(null, "stop") ?: ""
                                 val startMs = parseXmlTvTime(startStr)
                                 val stopMs = parseXmlTvTime(stopStr)
 
-                                if (startMs > 0 && stopMs > 0 && now in (startMs - 15 * 60 * 1000L)..(stopMs + 15 * 60 * 1000L)) {
+                                if (startMs > 0 && stopMs > 0 && now in (startMs - 5 * 60 * 1000L)..(stopMs + 5 * 60 * 1000L)) {
                                     inProgramme = true
                                     isCurrentProgram = true
                                     progTitle = ""
@@ -973,7 +907,7 @@ class MainActivity : AppCompatActivity() {
                         if (text.isNotEmpty()) {
                             if (inChannel && currentTag.equals("display-name", ignoreCase = true) && currentChannelId.isNotEmpty()) {
                                 val norm = normalizeName(text)
-                                if (ourChannelLookup.containsKey(norm)) {
+                                if (channelLookup.containsKey(norm)) {
                                     xmlIdToOurKey[currentChannelId] = norm
                                     tempEpgLogos[currentChannelId]?.let { tempEpgLogos[norm] = it }
                                 }
@@ -990,7 +924,7 @@ class MainActivity : AppCompatActivity() {
                             currentChannelId = ""
                         } else if (endTag.equals("programme", ignoreCase = true)) {
                             if (inProgramme && isCurrentProgram && progTitle.isNotEmpty()) {
-                                val ourKey = xmlIdToOurKey[progChannel]
+                                val ourKey = xmlIdToOurKey[progChannel] ?: channelLookup[progChannel]
                                 if (ourKey != null) {
                                     livePrograms[ourKey] = progTitle
                                     livePrograms[progChannel] = progTitle
