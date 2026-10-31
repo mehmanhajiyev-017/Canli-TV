@@ -125,6 +125,28 @@ class MainActivity : AppCompatActivity() {
 
     private var isM3uLoading = false
     private var isEpgLoading = false
+    private val loadingLock = Any()
+
+    private val playlistClient = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    private val epgClient = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    private var playerErrorCount = 0
+    private var lastPlayerErrorTime = 0L
 
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
 
@@ -362,8 +384,27 @@ class MainActivity : AppCompatActivity() {
 
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    player?.prepare()
-                    player?.play()
+                    val now = System.currentTimeMillis()
+                    if (now - lastPlayerErrorTime > 30000L) playerErrorCount = 0
+                    lastPlayerErrorTime = now
+                    playerErrorCount++
+
+                    if (playerErrorCount <= 3) {
+                        handler.postDelayed({
+                            if (!isFinishing && !isDestroyed && player != null) {
+                                player?.prepare()
+                                player?.play()
+                            }
+                        }, playerErrorCount * 1500L)
+                    } else {
+                        runOnUiThread {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Ошибка потока. Попробуйте другой канал.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
                 }
             })
         }
@@ -377,6 +418,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentPlayingIndex = channelIndex
+        playerErrorCount = 0
+        lastPlayerErrorTime = System.currentTimeMillis()
         val channel = allChannels[channelIndex]
 
         getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
@@ -543,91 +586,112 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
-        if (isM3uLoading) return
-        isM3uLoading = true
-        runOnUiThread { 
+        synchronized(loadingLock) {
+            if (isM3uLoading) return
+            isM3uLoading = true
+        }
+
+        runOnUiThread {
             tvSyncChannels.text = "Каналы: Загрузка..."
             tvSyncLogos.text = "Логотипы: 0"
         }
 
-        val client = OkHttpClient.Builder()
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .build()
+        val request = try {
+            Request.Builder()
+                .url(url)
+                .cacheControl(CacheControl.FORCE_NETWORK)
+                .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
+                .build()
+        } catch (e: Exception) {
+            synchronized(loadingLock) { isM3uLoading = false }
+            runOnUiThread {
+                tvSyncChannels.text = "Каналы: Ошибка ссылки"
+                if (allChannels.isEmpty()) showSettingsDialog()
+            }
+            return
+        }
 
-        val request = Request.Builder()
-            .url(url)
-            .cacheControl(CacheControl.FORCE_NETWORK)
-            .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
+        playlistClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                isM3uLoading = false
+                synchronized(loadingLock) { isM3uLoading = false }
                 runOnUiThread {
-                    tvSyncChannels.text = "Каналы: Ошибка"
-                    if (allChannels.isEmpty()) {
-                        showSettingsDialog()
-                    }
+                    tvSyncChannels.text = "Каналы: Ошибка загрузки"
+                    if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                 }
             }
 
             override fun onResponse(call: Call, response: Response) {
-                val body = response.body?.string()
-                if (!response.isSuccessful || body == null) {
-                    isM3uLoading = false
-                    runOnUiThread {
-                        tvSyncChannels.text = "Каналы: Ошибка"
-                        if (allChannels.isEmpty()) {
-                            showSettingsDialog()
+                var playlistText: String? = null
+                try {
+                    response.use {
+                        if (it.isSuccessful) {
+                            playlistText = it.body?.string()
                         }
+                    }
+                } catch (_: Exception) {
+                    playlistText = null
+                }
+
+                val body = playlistText
+                if (body.isNullOrBlank()) {
+                    synchronized(loadingLock) { isM3uLoading = false }
+                    runOnUiThread {
+                        tvSyncChannels.text = "Каналы: Пустой ответ"
+                        if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                     }
                     return
                 }
 
                 Thread {
-                    val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-                    val lastPlayedUrl = if (currentPlayingIndex in allChannels.indices) {
-                        allChannels[currentPlayingIndex].streamUrl
-                    } else {
-                        prefs.getString("LAST_CHANNEL_URL", "") ?: ""
-                    }
-
-                    parseM3ULive(body)
-                    applyEpgLogosToChannels()
-                    isM3uLoading = false
-
-                    val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
-
-                    runOnUiThread {
-                        tvSyncChannels.text = "Каналы: ${allChannels.size}"
-                        tvSyncLogos.text = "Логотипы: $logosCount"
-
-                        setupCategoryAdapter()
-                        val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
-                        filterChannels(catToSelect)
-
-                        if (allChannels.isNotEmpty()) {
-                            val resumeIndex = if (lastPlayedUrl.isNotEmpty()) {
-                                allChannels.indexOfFirst { it.streamUrl == lastPlayedUrl }.takeIf { it != -1 } ?: 0
-                            } else {
-                                0
-                            }
-
-                            if (autoPlay || player?.isPlaying != true) {
-                                playChannelByIndex(resumeIndex)
-                            } else {
-                                currentPlayingIndex = resumeIndex
-                            }
-
-                            val savedEpg = prefs.getString("EPG_URL", "") ?: ""
-                            if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
-                                handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 12000)
-                            }
+                    try {
+                        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                        val lastPlayedUrl = if (currentPlayingIndex in allChannels.indices) {
+                            allChannels[currentPlayingIndex].streamUrl
                         } else {
-                            showSettingsDialog()
+                            prefs.getString("LAST_CHANNEL_URL", "") ?: ""
+                        }
+
+                        parseM3ULive(body)
+                        applyEpgLogosToChannels()
+                        val channelCount = allChannels.size
+                        val logosCount = allChannels.count { it.logoUrl.isNotEmpty() }
+
+                        runOnUiThread {
+                            synchronized(loadingLock) { isM3uLoading = false }
+                            if (isFinishing || isDestroyed) return@runOnUiThread
+
+                            tvSyncChannels.text = "Каналы: $channelCount"
+                            tvSyncLogos.text = "Логотипы: $logosCount"
+
+                            setupCategoryAdapter()
+                            val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
+                            filterChannels(catToSelect)
+
+                            if (allChannels.isNotEmpty()) {
+                                val resumeIndex = if (lastPlayedUrl.isNotEmpty()) {
+                                    allChannels.indexOfFirst { it.streamUrl == lastPlayedUrl }.takeIf { it >= 0 } ?: 0
+                                } else 0
+
+                                if (autoPlay || player?.isPlaying != true) {
+                                    playChannelByIndex(resumeIndex)
+                                } else {
+                                    currentPlayingIndex = resumeIndex
+                                }
+
+                                val savedEpg = prefs.getString("EPG_URL", "") ?: ""
+                                if (savedEpg.startsWith("http")) {
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 3000)
+                                }
+                            } else {
+                                showSettingsDialog()
+                            }
+                        }
+                    } catch (_: Exception) {
+                        synchronized(loadingLock) { isM3uLoading = false }
+                        runOnUiThread {
+                            tvSyncChannels.text = "Каналы: Ошибка обработки"
+                            if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                         }
                     }
                 }.start()
@@ -727,12 +791,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun downloadAndParseEpg(epgUrl: String) {
-        if (isEpgLoading) return
-        isEpgLoading = true
+        synchronized(loadingLock) {
+            if (isEpgLoading) return
+            isEpgLoading = true
+        }
 
         val cacheFile = File(cacheDir, "epg_cache.gz")
-
-        if (cacheFile.exists() && (System.currentTimeMillis() - cacheFile.lastModified() < 8 * 3600 * 1000L)) {
+        if (cacheFile.exists() && cacheFile.length() > 0 &&
+            System.currentTimeMillis() - cacheFile.lastModified() < 8 * 3600 * 1000L
+        ) {
             Thread {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
                 parseEpgFromFile(cacheFile)
@@ -740,59 +807,71 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        runOnUiThread {
-            tvSyncPrograms.text = "Программы: Скачивание..."
+        runOnUiThread { tvSyncPrograms.text = "Программы: Скачивание..." }
+
+        val request = try {
+            Request.Builder()
+                .url(epgUrl)
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+        } catch (_: Exception) {
+            synchronized(loadingLock) { isEpgLoading = false }
+            runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка ссылки" }
+            return
         }
 
-        val client = OkHttpClient.Builder()
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(180, TimeUnit.SECONDS)
-            .build()
-
-        val req = Request.Builder()
-            .url(epgUrl)
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
-
-        client.newCall(req).enqueue(object : Callback {
+        epgClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                isEpgLoading = false
-                runOnUiThread {
-                    tvSyncPrograms.text = "Программы: Ошибка"
-                }
+                synchronized(loadingLock) { isEpgLoading = false }
+                runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка загрузки" }
             }
 
             override fun onResponse(call: Call, response: Response) {
-                val body = response.body
-                if (!response.isSuccessful || body == null) {
-                    isEpgLoading = false
-                    return
-                }
-
-                Thread {
-                    Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
-                    try {
-                        val fos = FileOutputStream(cacheFile)
-                        body.byteStream().use { input ->
-                            val buffer = ByteArray(32768)
-                            var read: Int
-                            while (input.read(buffer).also { read = it } != -1) {
-                                fos.write(buffer, 0, read)
+                var downloadError = false
+                try {
+                    response.use { resp ->
+                        val body = resp.body
+                        if (!resp.isSuccessful || body == null) {
+                            downloadError = true
+                        } else {
+                            val tempFile = File(cacheDir, "epg_cache.tmp")
+                            try {
+                                body.byteStream().use { input ->
+                                    FileOutputStream(tempFile).use { output ->
+                                        val buffer = ByteArray(64 * 1024)
+                                        while (true) {
+                                            val count = input.read(buffer)
+                                            if (count < 0) break
+                                            output.write(buffer, 0, count)
+                                        }
+                                        output.fd.sync()
+                                    }
+                                }
+                                if (tempFile.length() == 0L) throw IOException("Empty EPG")
+                                if (cacheFile.exists()) cacheFile.delete()
+                                if (!tempFile.renameTo(cacheFile)) {
+                                    tempFile.copyTo(cacheFile, overwrite = true)
+                                    tempFile.delete()
+                                }
+                            } catch (e: Exception) {
+                                tempFile.delete()
+                                throw e
                             }
                         }
-                        fos.flush()
-                        fos.close()
-
-                        parseEpgFromFile(cacheFile)
-                    } catch (_: Exception) {
-                        isEpgLoading = false
-                        runOnUiThread {
-                            tvSyncPrograms.text = "Программы: Ошибка"
-                        }
                     }
-                }.start()
+                } catch (_: Exception) {
+                    downloadError = true
+                }
+
+                if (downloadError) {
+                    synchronized(loadingLock) { isEpgLoading = false }
+                    runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка загрузки" }
+                } else {
+                    Thread {
+                        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                        parseEpgFromFile(cacheFile)
+                    }.start()
+                }
             }
         })
     }
@@ -1169,14 +1248,17 @@ class MainActivity : AppCompatActivity() {
                     epgLogosMap[normalizeName(ch.name)] ?: ""
                 }
 
+                Glide.with(this@MainActivity).clear(imgLogo)
                 if (finalLogoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
                     Glide.with(this@MainActivity)
                         .load(finalLogoUrl)
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
                         .override(90, 90)
+                        .dontAnimate()
                         .into(imgLogo)
                 } else {
+                    imgLogo.setImageDrawable(null)
                     imgLogo.visibility = View.GONE
                 }
 
@@ -1272,13 +1354,17 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (imgBannerLogo != null) {
+            Glide.with(this).clear(imgBannerLogo!!)
             if (finalLogoUrl.isNotEmpty()) {
                 imgBannerLogo?.visibility = View.VISIBLE
                 Glide.with(this)
                     .load(finalLogoUrl)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                    .override(120, 120)
+                    .dontAnimate()
                     .into(imgBannerLogo!!)
             } else {
+                imgBannerLogo?.setImageDrawable(null)
                 imgBannerLogo?.visibility = View.GONE
             }
         }
