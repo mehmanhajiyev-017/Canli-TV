@@ -813,3 +813,718 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread { tvSyncPrograms.text = "Proqramlar: Link xətası" }
             return
         }
+
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                synchronized(loadingLock) { isEpgLoading = false }
+                runOnUiThread { tvSyncPrograms.text = "Proqramlar: Şəbəkə xətası" }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                var success = false
+                try {
+                    response.use { resp ->
+                        val body = resp.body
+                        if (resp.isSuccessful && body != null) {
+                            val tempFile = File(cacheDir, "epg_cache.tmp")
+                            body.byteStream().use { input ->
+                                FileOutputStream(tempFile).use { output ->
+                                    val buffer = ByteArray(32768)
+                                    var readBytes: Int
+                                    while (input.read(buffer).also { readBytes = it } != -1) {
+                                        output.write(buffer, 0, readBytes)
+                                    }
+                                }
+                            }
+                            if (tempFile.length() > 0L) {
+                                if (cacheFile.exists()) cacheFile.delete()
+                                tempFile.renameTo(cacheFile)
+                                success = true
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+
+                if (success) {
+                    Thread {
+                        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                        parseEpgFromFile(cacheFile)
+                    }.start()
+                } else {
+                    synchronized(loadingLock) { isEpgLoading = false }
+                    runOnUiThread { tvSyncPrograms.text = "Proqramlar: Fayl xətası" }
+                }
+            }
+        })
+    }
+
+    private fun parseEpgFromFile(file: File) {
+        try {
+            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Emal edilir..." }
+
+            val channelKeyMap = HashMap<String, String>(allChannels.size * 2)
+            for (ch in allChannels) {
+                val norm = normalizeName(ch.name)
+                if (norm.isNotEmpty()) {
+                    channelKeyMap[norm] = norm
+                }
+                if (ch.tvgId.isNotEmpty()) {
+                    channelKeyMap[ch.tvgId.lowercase(Locale.ROOT)] = norm
+                }
+                channelKeyMap[ch.name.lowercase(Locale.ROOT)] = norm
+            }
+
+            val fis = FileInputStream(file)
+            val bis = BufferedInputStream(fis, 16384)
+            bis.mark(2)
+            val b1 = bis.read()
+            val b2 = bis.read()
+            bis.reset()
+
+            val inStream: InputStream = if (b1 == 0x1f && b2 == 0x8b) {
+                GZIPInputStream(bis, 16384)
+            } else {
+                bis
+            }
+
+            val parser = Xml.newPullParser()
+            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+            parser.setInput(inStream, "UTF-8")
+
+            val now = System.currentTimeMillis()
+            val xmlIdToOurKey = HashMap<String, String>()
+            val livePrograms = HashMap<String, String>()
+            val tempEpgLogos = HashMap<String, String>()
+
+            var currentTag = ""
+            var currentChannelId = ""
+            var progChannel = ""
+            var progTitle = ""
+            var inChannel = false
+            var inProgramme = false
+            var isCurrentProgram = false
+
+            var eventType = parser.eventType
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        currentTag = parser.name
+                        if (currentTag.equals("channel", ignoreCase = true)) {
+                            inChannel = true
+                            currentChannelId = parser.getAttributeValue(null, "id")?.trim()?.lowercase(Locale.ROOT) ?: ""
+                            if (currentChannelId.isNotEmpty() && channelKeyMap.containsKey(currentChannelId)) {
+                                xmlIdToOurKey[currentChannelId] = channelKeyMap[currentChannelId] ?: currentChannelId
+                            }
+                        } else if (inChannel && currentTag.equals("icon", ignoreCase = true)) {
+                            val iconSrc = parser.getAttributeValue(null, "src")?.trim() ?: ""
+                            if (iconSrc.isNotEmpty() && currentChannelId.isNotEmpty()) {
+                                tempEpgLogos[currentChannelId] = iconSrc
+                                xmlIdToOurKey[currentChannelId]?.let { ourKey ->
+                                    tempEpgLogos[ourKey] = iconSrc
+                                }
+                            }
+                        } else if (currentTag.equals("programme", ignoreCase = true)) {
+                            progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
+                            val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
+
+                            if (ourKey != null && !livePrograms.containsKey(ourKey)) {
+                                val startStr = parser.getAttributeValue(null, "start") ?: ""
+                                val stopStr = parser.getAttributeValue(null, "stop") ?: ""
+                                val startMs = parseXmlTvTime(startStr)
+                                val stopMs = parseXmlTvTime(stopStr)
+
+                                if (startMs > 0 && stopMs > 0 && now in (startMs - 5 * 60 * 1000L)..(stopMs + 5 * 60 * 1000L)) {
+                                    inProgramme = true
+                                    isCurrentProgram = true
+                                    progTitle = ""
+                                } else {
+                                    inProgramme = false
+                                    isCurrentProgram = false
+                                }
+                            } else {
+                                inProgramme = false
+                                isCurrentProgram = false
+                            }
+                        }
+                    }
+
+                    XmlPullParser.TEXT -> {
+                        val text = parser.text?.trim() ?: ""
+                        if (text.isNotEmpty()) {
+                            if (inChannel && currentTag.equals("display-name", ignoreCase = true) && currentChannelId.isNotEmpty()) {
+                                val norm = normalizeName(text)
+                                if (channelKeyMap.containsKey(norm)) {
+                                    xmlIdToOurKey[currentChannelId] = norm
+                                    tempEpgLogos[currentChannelId]?.let { tempEpgLogos[norm] = it }
+                                }
+                            } else if (inProgramme && isCurrentProgram && currentTag.equals("title", ignoreCase = true) && progTitle.isEmpty()) {
+                                progTitle = text
+                            }
+                        }
+                    }
+
+                    XmlPullParser.END_TAG -> {
+                        val endTag = parser.name
+                        if (endTag.equals("channel", ignoreCase = true)) {
+                            inChannel = false
+                            currentChannelId = ""
+                        } else if (endTag.equals("programme", ignoreCase = true)) {
+                            if (inProgramme && isCurrentProgram && progTitle.isNotEmpty()) {
+                                val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
+                                if (ourKey != null) {
+                                    livePrograms[ourKey] = progTitle
+                                    livePrograms[progChannel] = progTitle
+                                }
+                            }
+                            inProgramme = false
+                            isCurrentProgram = false
+                            progChannel = ""
+                            progTitle = ""
+                        }
+                        currentTag = ""
+                    }
+                }
+                eventType = parser.next()
+            }
+
+            inStream.close()
+
+            if (tempEpgLogos.isNotEmpty()) {
+                epgLogosMap.putAll(tempEpgLogos)
+                applyEpgLogosToChannels()
+            }
+
+            currentProgramsMap.clear()
+            currentProgramsMap.putAll(livePrograms)
+
+            runOnUiThread {
+                tvSyncPrograms.text = "Proqramlar: ${currentProgramsMap.size}"
+                tvSyncLogos.text = "Loqolar: ${allChannels.count { it.logoUrl.isNotEmpty() }}"
+                recyclerViewChannels.adapter?.notifyDataSetChanged()
+                if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
+                    showInfoBanner(allChannels[currentPlayingIndex])
+                }
+            }
+        } catch (_: Exception) {
+            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Xəta" }
+        } finally {
+            synchronized(loadingLock) { isEpgLoading = false }
+        }
+    }
+
+    private fun parseXmlTvTime(timeStr: String): Long {
+        if (timeStr.length < 14) return 0L
+        val clean = timeStr.trim()
+        return try {
+            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
+                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+                format.parse(clean)?.time ?: 0L
+            } else {
+                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                format.timeZone = detectedTimeZone
+                format.parse(clean.substring(0, 14))?.time ?: 0L
+            }
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    private fun normalizeName(text: String): String {
+        return text.lowercase(Locale.ROOT)
+            .replace(Regex("""\b(hd|sd|fhd|4k|ru|ua|az|tr|hevc|50fps|orig|original|tv|channel)\b"""), "")
+            .replace(Regex("""[^a-z0-9а-яёәғçşöüı]"""), "")
+            .trim()
+    }
+
+    private fun getProgramForChannel(ch: Channel): String {
+        if (currentProgramsMap.isEmpty()) return ""
+
+        val norm = normalizeName(ch.name)
+        if (norm.isNotEmpty()) {
+            currentProgramsMap[norm]?.let { return it }
+        }
+
+        if (ch.tvgId.isNotEmpty()) {
+            currentProgramsMap[ch.tvgId.lowercase(Locale.ROOT)]?.let { return it }
+        }
+
+        currentProgramsMap[ch.name.lowercase(Locale.ROOT)]?.let { return it }
+
+        return ""
+    }
+
+    private fun filterChannels(category: String) {
+        selectedCategory = category
+        displayedChannels.clear()
+
+        when (category) {
+            "Все" -> displayedChannels.addAll(allChannels)
+            "Избранное" -> displayedChannels.addAll(allChannels.filter { favoriteUrls.contains(it.streamUrl) })
+            else -> displayedChannels.addAll(allChannels.filter { it.category == category })
+        }
+        setupChannelAdapter()
+    }
+
+    private fun openChannelPanelCenteredOnCurrent() {
+        channelPanel.visibility = View.VISIBLE
+        categoryPanel.visibility = View.GONE
+
+        if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
+            filterChannels(selectedCategory)
+            recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+            return
+        }
+        val currentChannel = allChannels[currentPlayingIndex]
+        val inCurrentCat = when (selectedCategory) {
+            "Все" -> true
+            "Избранное" -> favoriteUrls.contains(currentChannel.streamUrl)
+            else -> currentChannel.category == selectedCategory
+        }
+        if (!inCurrentCat) selectedCategory = "Все"
+        filterChannels(selectedCategory)
+        focusCurrentChannelCentered()
+    }
+
+    private fun focusCurrentChannelCentered() {
+        if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
+            recyclerViewChannels.post { recyclerViewChannels.requestFocus() }
+            return
+        }
+        val currentChannel = allChannels[currentPlayingIndex]
+        val targetPos = displayedChannels.indexOfFirst { it.number == currentChannel.number }.coerceAtLeast(0)
+
+        recyclerViewChannels.post {
+            val layoutManager = recyclerViewChannels.layoutManager as? LinearLayoutManager ?: return@post
+            val itemHeightPx = (68 * resources.displayMetrics.density).toInt()
+            val centerOffset = (recyclerViewChannels.height / 2) - (itemHeightPx / 2)
+            layoutManager.scrollToPositionWithOffset(targetPos, centerOffset)
+
+            recyclerViewChannels.post {
+                val holder = recyclerViewChannels.findViewHolderForAdapterPosition(targetPos)
+                if (holder != null) holder.itemView.requestFocus() else recyclerViewChannels.requestFocus()
+            }
+        }
+    }
+
+    private fun setupCategoryAdapter() {
+        recyclerViewCategories.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                val row = LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT).apply {
+                        setMargins(0, 4, 0, 6)
+                    }
+                    setPadding(18, 14, 18, 14)
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    isFocusable = true
+                    isClickable = true
+                    background = rowDefaultBg
+                }
+                val iconView = TextView(this@MainActivity).apply { 
+                    id = View.generateViewId()
+                    textSize = 18f 
+                }
+                val titleView = TextView(this@MainActivity).apply {
+                    id = View.generateViewId()
+                    textSize = 15f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 14 }
+                }
+                val arrowView = TextView(this@MainActivity).apply { 
+                    id = View.generateViewId()
+                    text = "›"
+                    textSize = 18f
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD 
+                }
+                row.addView(iconView); row.addView(titleView); row.addView(arrowView)
+                return object : RecyclerView.ViewHolder(row) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val cat = categories[position]
+                val row = holder.itemView as LinearLayout
+                val iconView = row.getChildAt(0) as TextView
+                val titleView = row.getChildAt(1) as TextView
+                val arrowView = row.getChildAt(2) as TextView
+
+                titleView.text = cat
+
+                iconView.text = when (cat) {
+                    "Все" -> "☰"
+                    "Избранное" -> "★"
+                    else -> "•"
+                }
+
+                row.setOnFocusChangeListener { _, hasFocus ->
+                    row.background = if (hasFocus) rowFocusedBg else rowDefaultBg
+                    val color = if (hasFocus) Color.WHITE else Color.parseColor("#ECEFF1")
+                    val subColor = if (hasFocus) Color.WHITE else Color.parseColor("#90A4AE")
+                    titleView.setTextColor(color)
+                    iconView.setTextColor(subColor)
+                    arrowView.setTextColor(subColor)
+                }
+
+                val selectAction = {
+                    filterChannels(cat)
+                    categoryPanel.visibility = View.GONE
+                    channelPanel.visibility = View.VISIBLE
+                    recyclerViewChannels.post {
+                        recyclerViewChannels.scrollToPosition(0)
+                        val vh = recyclerViewChannels.findViewHolderForAdapterPosition(0)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewChannels.requestFocus()
+                    }
+                }
+
+                row.setOnClickListener { selectAction() }
+
+                row.setOnKeyListener { _, keyCode, event ->
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                            btnOpenSettings.requestFocus()
+                            return@setOnKeyListener true
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                            selectAction()
+                            return@setOnKeyListener true
+                        }
+                    }
+                    false
+                }
+            }
+            override fun getItemCount() = categories.size
+        }
+    }
+
+    private fun setupChannelAdapter() {
+        recyclerViewChannels.adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+                return object : RecyclerView.ViewHolder(layoutInflater.inflate(R.layout.item_channel, parent, false)) {}
+            }
+
+            override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+                val ch = displayedChannels[position]
+                val row = holder.itemView.findViewById<LinearLayout>(R.id.channelRowLayout)
+                val tvNum = holder.itemView.findViewById<TextView>(R.id.tvNumber)
+                val imgLogo = holder.itemView.findViewById<ImageView>(R.id.imgLogo)
+                val tvName = holder.itemView.findViewById<TextView>(R.id.tvName)
+                val tvProg = holder.itemView.findViewById<TextView>(R.id.tvProgramInfo)
+                val tvFavStar = holder.itemView.findViewById<TextView>(R.id.tvFavStar)
+
+                tvNum.text = ch.number.toString()
+                tvName.text = ch.name
+
+                val currentProg = getProgramForChannel(ch)
+                if (currentProg.isNotEmpty()) {
+                    tvProg?.text = currentProg
+                    tvProg?.visibility = View.VISIBLE
+                } else {
+                    tvProg?.text = ""
+                    tvProg?.visibility = View.GONE
+                }
+
+                tvFavStar?.visibility = if (favoriteUrls.contains(ch.streamUrl)) View.VISIBLE else View.GONE
+
+                val finalLogoUrl = ch.logoUrl.ifEmpty {
+                    if (ch.tvgId.isNotEmpty()) epgLogosMap[ch.tvgId.lowercase(Locale.ROOT)] ?: "" else ""
+                }.ifEmpty {
+                    epgLogosMap[normalizeName(ch.name)] ?: ""
+                }
+
+                if (finalLogoUrl.isNotEmpty()) {
+                    imgLogo.visibility = View.VISIBLE
+                    Glide.with(this@MainActivity)
+                        .load(finalLogoUrl)
+                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                        .override(90, 90)
+                        .into(imgLogo)
+                } else {
+                    Glide.with(this@MainActivity).clear(imgLogo)
+                    imgLogo.setImageDrawable(null)
+                    imgLogo.visibility = View.GONE
+                }
+
+                row.background = rowDefaultBg
+
+                row.setOnFocusChangeListener { _, hasFocus ->
+                    row.background = if (hasFocus) rowFocusedBg else rowDefaultBg
+                    tvNum.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#B0BEC5"))
+                    tvName.setTextColor(if (hasFocus) Color.WHITE else Color.parseColor("#FFFFFF"))
+                }
+
+                row.setOnClickListener {
+                    val allIndex = allChannels.indexOf(ch)
+                    if (allIndex != -1) {
+                        playChannelByIndex(allIndex)
+                    }
+                    channelPanel.visibility = View.GONE
+                }
+
+                row.setOnLongClickListener { toggleFavorite(ch); true }
+
+                row.setOnKeyListener { _, keyCode, event ->
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0 && displayedChannels.size > 1) {
+                            val lastIndex = displayedChannels.size - 1
+                            recyclerViewChannels.scrollToPosition(lastIndex)
+                            recyclerViewChannels.post {
+                                recyclerViewChannels.findViewHolderForAdapterPosition(lastIndex)?.itemView?.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && position == displayedChannels.size - 1 && displayedChannels.size > 1) {
+                            recyclerViewChannels.scrollToPosition(0)
+                            recyclerViewChannels.post {
+                                recyclerViewChannels.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                            channelPanel.visibility = View.GONE
+                            categoryPanel.visibility = View.VISIBLE
+                            val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
+                            recyclerViewCategories.post {
+                                recyclerViewCategories.scrollToPosition(catIndex)
+                                val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                                if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                            channelPanel.visibility = View.GONE
+                            return@setOnKeyListener true
+                        }
+                    }
+                    false
+                }
+            }
+            override fun getItemCount() = displayedChannels.size
+        }
+    }
+
+    private fun stepChannelInCurrentCategory(step: Int) {
+        val list = if (displayedChannels.isNotEmpty()) displayedChannels else allChannels
+        if (list.isEmpty()) return
+
+        val currentPlayingChannel = if (currentPlayingIndex in allChannels.indices) allChannels[currentPlayingIndex] else null
+
+        val currentPosInDisplayed = list.indexOfFirst { it.streamUrl == currentPlayingChannel?.streamUrl }
+        val nextPos = if (currentPosInDisplayed != -1) {
+            (currentPosInDisplayed + step + list.size) % list.size
+        } else {
+            0
+        }
+
+        val targetChannel = list[nextPos]
+        val targetIndexInAll = allChannels.indexOf(targetChannel)
+        if (targetIndexInAll != -1) {
+            playChannelByIndex(targetIndexInAll)
+        }
+    }
+
+    private fun showInfoBanner(channel: Channel) {
+        tvBannerNumber.text = channel.number.toString()
+        tvBannerName.text = channel.name
+        val isFav = if (favoriteUrls.contains(channel.streamUrl)) " ★" else ""
+
+        val prog = getProgramForChannel(channel)
+        val progText = if (prog.isNotEmpty()) "  |  🔹 $prog" else ""
+
+        tvBannerCategory.text = "● ${channel.category.uppercase()}$isFav$progText"
+
+        val finalLogoUrl = channel.logoUrl.ifEmpty {
+            if (channel.tvgId.isNotEmpty()) epgLogosMap[channel.tvgId.lowercase(Locale.ROOT)] ?: "" else ""
+        }.ifEmpty {
+            epgLogosMap[normalizeName(channel.name)] ?: ""
+        }
+
+        if (imgBannerLogo != null) {
+            if (finalLogoUrl.isNotEmpty()) {
+                imgBannerLogo?.visibility = View.VISIBLE
+                Glide.with(this)
+                    .load(finalLogoUrl)
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .override(120, 120)
+                    .into(imgBannerLogo!!)
+            } else {
+                Glide.with(this).clear(imgBannerLogo!!)
+                imgBannerLogo?.setImageDrawable(null)
+                imgBannerLogo?.visibility = View.GONE
+            }
+        }
+
+        infoBanner.visibility = View.VISIBLE
+        bannerRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { infoBanner.visibility = View.GONE }
+        bannerRunnable = r
+        handler.postDelayed(r, 4500)
+    }
+
+    private fun exitApplicationCompletely() {
+        player?.stop()
+        player?.release()
+        player = null
+        finishAffinity()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (linkDialogPanel.visibility == View.VISIBLE) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
+            return super.onKeyDown(keyCode, event)
+        }
+
+        if (numPadPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+                    digitInputBuffer.clear(); numPadPanel.visibility = View.GONE; return true
+                }
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
+            }
+            return super.onKeyDown(keyCode, event)
+        }
+
+        if (categoryPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    categoryPanel.visibility = View.GONE
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    btnOpenSettings.requestFocus()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    categoryPanel.visibility = View.GONE
+                    channelPanel.visibility = View.VISIBLE
+                    focusCurrentChannelCentered()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    return super.onKeyDown(keyCode, event)
+                }
+            }
+        }
+
+        if (channelPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    channelPanel.visibility = View.GONE
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    channelPanel.visibility = View.GONE
+                    categoryPanel.visibility = View.VISIBLE
+                    val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
+                    recyclerViewCategories.post {
+                        recyclerViewCategories.scrollToPosition(catIndex)
+                        val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    return super.onKeyDown(keyCode, event)
+                }
+            }
+        }
+
+        when (keyCode) {
+            KeyEvent.KEYCODE_BACK -> {
+                backPressCount++
+                resetBackPressRunnable?.let { handler.removeCallbacks(it) }
+
+                if (backPressCount >= 5) {
+                    exitApplicationCompletely()
+                    return true
+                }
+
+                val r = Runnable { backPressCount = 0 }
+                resetBackPressRunnable = r
+                handler.postDelayed(r, 2000)
+
+                if (previousPlayingIndex in allChannels.indices && previousPlayingIndex != currentPlayingIndex) {
+                    playChannelByIndex(previousPlayingIndex)
+                }
+
+                if (backPressCount >= 2) {
+                    Toast.makeText(this, "Çıxış üçün daha ${5 - backPressCount} dəfə basın", Toast.LENGTH_SHORT).show()
+                }
+
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                okPressCount++
+                resetOkPressRunnable?.let { handler.removeCallbacks(it) }
+
+                if (okPressCount >= 3) {
+                    okPressCount = 0
+                    if (syncStatusCard.visibility == View.VISIBLE) {
+                        syncStatusCard.visibility = View.GONE
+                    } else {
+                        syncStatusCard.visibility = View.VISIBLE
+                    }
+                    return true
+                }
+
+                val r = Runnable {
+                    if (okPressCount == 1 && allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
+                        showInfoBanner(allChannels[currentPlayingIndex])
+                    }
+                    okPressCount = 0
+                }
+                resetOkPressRunnable = r
+                handler.postDelayed(r, 600)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                stepChannelInCurrentCategory(1)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                stepChannelInCurrentCategory(-1)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                openChannelPanelCenteredOnCurrent()
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                numPadPanel.visibility = View.VISIBLE
+                digitInputBuffer.clear()
+                tvNumpadDisplay.text = "---"
+                findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
+                return true
+            }
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun appendNumpadDigit(digit: Int) {
+        if (digitInputBuffer.length >= 4) return
+        digitInputBuffer.append(digit)
+        tvNumpadDisplay.text = digitInputBuffer.toString()
+        if (numPadPanel.visibility != View.VISIBLE) {
+            numPadPanel.visibility = View.VISIBLE
+            findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
+        }
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { executeNumpadSearch() }
+        digitAutoExecuteRunnable = r
+        handler.postDelayed(r, 5000)
+    }
+
+    private fun executeNumpadSearch() {
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        val targetNumber = digitInputBuffer.toString().toIntOrNull()
+        if (targetNumber != null) {
+            val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
+            if (foundIndex != -1) {
+                playChannelByIndex(foundIndex)
+                numPadPanel.visibility = View.GONE
+            } else {
+                Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
+                tvNumpadDisplay.text = "---"
+            }
+        }
+        digitInputBuffer.clear()
+    }
+}
