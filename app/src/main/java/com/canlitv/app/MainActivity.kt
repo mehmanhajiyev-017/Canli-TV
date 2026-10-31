@@ -1,6 +1,7 @@
 package com.canlitv.app
 
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -80,6 +81,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSaveEpg: Button
     private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
+    private lateinit var btnToggleMode: Button
     private lateinit var btnOpenSettings: View
     private lateinit var recyclerViewChannels: RecyclerView
     private lateinit var recyclerViewCategories: RecyclerView
@@ -111,6 +113,9 @@ class MainActivity : AppCompatActivity() {
 
     private var okPressCount = 0
     private var resetOkPressRunnable: Runnable? = null
+
+    // Rejim: true = TV Rejimi, false = Mobil Telefon Rejimi
+    private var isTvMode = true
 
     private lateinit var rowDefaultBg: GradientDrawable
     private lateinit var rowFocusedBg: GradientDrawable
@@ -177,6 +182,7 @@ class MainActivity : AppCompatActivity() {
         btnSaveEpg = findViewById(R.id.btnSaveEpg)
         btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
+        btnToggleMode = findViewById(R.id.btnToggleMode)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
         recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
@@ -204,10 +210,27 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
 
+        // Yadda saxlanmış TV / Mobil rejimini bərpa edirik
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        isTvMode = prefs.getBoolean("IS_TV_MODE", true)
+        applyAppMode(isTvMode)
+
         detectTimezoneByIp()
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
+
+        // Ekrana toxunduqda (mobil istifadə zamanı) kanalların açılması
+        playerView.setOnClickListener {
+            if (!isTvMode) {
+                if (channelPanel.visibility == View.VISIBLE || categoryPanel.visibility == View.VISIBLE) {
+                    channelPanel.visibility = View.GONE
+                    categoryPanel.visibility = View.GONE
+                } else {
+                    openChannelPanelCenteredOnCurrent()
+                }
+            }
+        }
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -269,10 +292,21 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
 
+        // TV / Mobil keçid düyməsi
+        btnToggleMode.setOnClickListener {
+            isTvMode = !isTvMode
+            prefs.edit().putBoolean("IS_TV_MODE", isTvMode).apply()
+            applyAppMode(isTvMode)
+            Toast.makeText(
+                applicationContext,
+                if (isTvMode) "TV Rejimi Aktivləşdirildi" else "Mobil Telefon Rejimi Aktivləşdirildi",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
-                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
                 prefs.edit().putString("M3U_URL", url).apply()
                 linkDialogPanel.visibility = View.GONE
                 currentPlayingIndex = -1
@@ -295,7 +329,6 @@ class MainActivity : AppCompatActivity() {
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
-                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
                 prefs.edit().putString("EPG_URL", epgUrl).apply()
                 linkDialogPanel.visibility = View.GONE
                 deleteLocalEpgCache()
@@ -318,6 +351,17 @@ class MainActivity : AppCompatActivity() {
 
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
+        }
+    }
+
+    // Rejimə uyğun vizual və ekran oriyentasiyasının təyini
+    private fun applyAppMode(tvMode: Boolean) {
+        if (tvMode) {
+            btnToggleMode.text = "📺"
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            btnToggleMode.text = "📱"
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
@@ -422,7 +466,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnToggleMode, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -538,6 +582,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
+        applyAppMode(isTvMode)
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveM3u.requestFocus()
     }
@@ -815,20 +860,14 @@ class MainActivity : AppCompatActivity() {
         try {
             runOnUiThread { tvSyncPrograms.text = "Proqramlar: Emal edilir..." }
 
-            // TVirl Metodu: Yalnız tətbiqdəki mövcud kanalların açar indekslərini çıxarırıq
             val channelKeyMap = HashMap<String, String>(allChannels.size * 2)
-            val neededChannels = HashSet<String>(allChannels.size)
-
             for (ch in allChannels) {
                 val norm = normalizeName(ch.name)
                 if (norm.isNotEmpty()) {
                     channelKeyMap[norm] = norm
-                    neededChannels.add(norm)
                 }
                 if (ch.tvgId.isNotEmpty()) {
-                    val idKey = ch.tvgId.lowercase(Locale.ROOT)
-                    channelKeyMap[idKey] = norm
-                    neededChannels.add(idKey)
+                    channelKeyMap[ch.tvgId.lowercase(Locale.ROOT)] = norm
                 }
                 channelKeyMap[ch.name.lowercase(Locale.ROOT)] = norm
             }
@@ -886,14 +925,12 @@ class MainActivity : AppCompatActivity() {
                             progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
                             val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
 
-                            // TVirl Filtri: Əgər kanal bizim siyahıda varsa və verilişi hələ tapılmayıbsa yoxlayırıq
                             if (ourKey != null && !livePrograms.containsKey(ourKey)) {
                                 val startStr = parser.getAttributeValue(null, "start") ?: ""
                                 val stopStr = parser.getAttributeValue(null, "stop") ?: ""
                                 val startMs = parseXmlTvTime(startStr)
                                 val stopMs = parseXmlTvTime(stopStr)
 
-                                // Efirdə hazırda yayımlanan zaman intervalı
                                 if (startMs > 0 && stopMs > 0 && now in (startMs - 5 * 60 * 1000L)..(stopMs + 5 * 60 * 1000L)) {
                                     inProgramme = true
                                     isCurrentProgram = true
