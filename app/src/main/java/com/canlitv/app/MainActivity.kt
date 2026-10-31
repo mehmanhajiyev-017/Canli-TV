@@ -121,9 +121,10 @@ class MainActivity : AppCompatActivity() {
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
-    private var hideSyncCardRunnable: Runnable? = null
 
+    @Volatile
     private var isM3uLoading = false
+    @Volatile
     private var isEpgLoading = false
     private val loadingLock = Any()
 
@@ -591,7 +592,7 @@ class MainActivity : AppCompatActivity() {
             isM3uLoading = true
         }
 
-        runOnUiThread {
+        runOnUiThread { 
             tvSyncChannels.text = "Каналы: Загрузка..."
             tvSyncLogos.text = "Логотипы: 0"
         }
@@ -602,7 +603,7 @@ class MainActivity : AppCompatActivity() {
                 .cacheControl(CacheControl.FORCE_NETWORK)
                 .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
                 .build()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             synchronized(loadingLock) { isM3uLoading = false }
             runOnUiThread {
                 tvSyncChannels.text = "Каналы: Ошибка ссылки"
@@ -681,7 +682,7 @@ class MainActivity : AppCompatActivity() {
 
                                 val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                                 if (savedEpg.startsWith("http")) {
-                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 3000)
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
                                 }
                             } else {
                                 showSettingsDialog()
@@ -1027,7 +1028,7 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
             runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка" }
         } finally {
-            isEpgLoading = false
+            synchronized(loadingLock) { isEpgLoading = false }
         }
     }
 
@@ -1248,16 +1249,15 @@ class MainActivity : AppCompatActivity() {
                     epgLogosMap[normalizeName(ch.name)] ?: ""
                 }
 
-                Glide.with(this@MainActivity).clear(imgLogo)
                 if (finalLogoUrl.isNotEmpty()) {
                     imgLogo.visibility = View.VISIBLE
                     Glide.with(this@MainActivity)
                         .load(finalLogoUrl)
-                        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                         .override(90, 90)
-                        .dontAnimate()
                         .into(imgLogo)
                 } else {
+                    Glide.with(this@MainActivity).clear(imgLogo)
                     imgLogo.setImageDrawable(null)
                     imgLogo.visibility = View.GONE
                 }
@@ -1354,16 +1354,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (imgBannerLogo != null) {
-            Glide.with(this).clear(imgBannerLogo!!)
             if (finalLogoUrl.isNotEmpty()) {
                 imgBannerLogo?.visibility = View.VISIBLE
                 Glide.with(this)
                     .load(finalLogoUrl)
-                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                     .override(120, 120)
-                    .dontAnimate()
                     .into(imgBannerLogo!!)
             } else {
+                Glide.with(this).clear(imgBannerLogo!!)
                 imgBannerLogo?.setImageDrawable(null)
                 imgBannerLogo?.visibility = View.GONE
             }
