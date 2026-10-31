@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -82,7 +83,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSaveEpg: Button
     private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
-    private lateinit var btnToggleMode: Button
+    private lateinit var btnToggleMode: ImageButton
     private lateinit var btnOpenSettings: View
 
     private lateinit var btnMobileCategories: Button
@@ -231,7 +232,6 @@ class MainActivity : AppCompatActivity() {
         initNumpadButtons()
         initSettingsPanelFocus()
 
-        // Mobildə ekrana toxunduqda menyu və ya üst idarəetmə panelini açmaq
         playerView.setOnClickListener {
             if (!isTvMode) {
                 if (channelPanel.visibility == View.VISIBLE || categoryPanel.visibility == View.VISIBLE) {
@@ -395,13 +395,13 @@ class MainActivity : AppCompatActivity() {
     private fun applyAppMode(tvMode: Boolean) {
         val density = resources.displayMetrics.density
         if (tvMode) {
-            btnToggleMode.text = "📺"
+            btnToggleMode.setImageResource(R.drawable.ic_mode_tv)
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             mobileTopBar.visibility = View.GONE
             categoryPanel.layoutParams.width = (320 * density).toInt()
             channelPanel.layoutParams.width = (420 * density).toInt()
         } else {
-            btnToggleMode.text = "📱"
+            btnToggleMode.setImageResource(R.drawable.ic_mode_mobile)
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             categoryPanel.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
             channelPanel.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -511,7 +511,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnToggleMode, btnCloseSettings)
+        btnToggleMode.backgroundTintList = null
+        btnToggleMode.background = defaultBtnBg
+        btnToggleMode.setOnFocusChangeListener { _, hasFocus ->
+            btnToggleMode.background = if (hasFocus) focusedBtnBg else defaultBtnBg
+        }
+
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -1280,7 +1286,8 @@ class MainActivity : AppCompatActivity() {
                         .override(90, 90)
                         .into(imgLogo)
                 } else {
-                    Glide.with(this@MainActivity).clear(imgLogo)
+                    val safeLogoView: View = imgLogo
+                    Glide.with(this@MainActivity).clear(safeLogoView)
                     imgLogo.setImageDrawable(null)
                     imgLogo.visibility = View.GONE
                 }
@@ -1376,13 +1383,200 @@ class MainActivity : AppCompatActivity() {
             epgLogosMap[normalizeName(channel.name)] ?: ""
         }
 
-        if (imgBannerLogo != null) {
+        val bannerView = imgBannerLogo
+        if (bannerView != null) {
             if (finalLogoUrl.isNotEmpty()) {
-                imgBannerLogo?.visibility = View.VISIBLE
+                bannerView.visibility = View.VISIBLE
                 Glide.with(this)
                     .load(finalLogoUrl)
                     .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
                     .override(120, 120)
-                    .into(imgBannerLogo!!)
+                    .into(bannerView)
             } else {
-                Glide.with(this).clear(
+                val safeView: View = bannerView
+                Glide.with(this).clear(safeView)
+                bannerView.setImageDrawable(null)
+                bannerView.visibility = View.GONE
+            }
+        }
+
+        infoBanner.visibility = View.VISIBLE
+        bannerRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { infoBanner.visibility = View.GONE }
+        bannerRunnable = r
+        handler.postDelayed(r, 4500)
+    }
+
+    private fun exitApplicationCompletely() {
+        player?.stop()
+        player?.release()
+        player = null
+        finishAffinity()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (linkDialogPanel.visibility == View.VISIBLE) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
+            return super.onKeyDown(keyCode, event)
+        }
+
+        if (numPadPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+                    digitInputBuffer.clear(); numPadPanel.visibility = View.GONE; return true
+                }
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
+            }
+            return super.onKeyDown(keyCode, event)
+        }
+
+        if (categoryPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    categoryPanel.visibility = View.GONE
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    btnOpenSettings.requestFocus()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    categoryPanel.visibility = View.GONE
+                    channelPanel.visibility = View.VISIBLE
+                    focusCurrentChannelCentered()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    return super.onKeyDown(keyCode, event)
+                }
+            }
+        }
+
+        if (channelPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    channelPanel.visibility = View.GONE
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    channelPanel.visibility = View.GONE
+                    categoryPanel.visibility = View.VISIBLE
+                    val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
+                    recyclerViewCategories.post {
+                        recyclerViewCategories.scrollToPosition(catIndex)
+                        val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    return super.onKeyDown(keyCode, event)
+                }
+            }
+        }
+
+        when (keyCode) {
+            KeyEvent.KEYCODE_BACK -> {
+                backPressCount++
+                resetBackPressRunnable?.let { handler.removeCallbacks(it) }
+
+                if (backPressCount >= 5) {
+                    exitApplicationCompletely()
+                    return true
+                }
+
+                val r = Runnable { backPressCount = 0 }
+                resetBackPressRunnable = r
+                handler.postDelayed(r, 2000)
+
+                if (previousPlayingIndex in allChannels.indices && previousPlayingIndex != currentPlayingIndex) {
+                    playChannelByIndex(previousPlayingIndex)
+                }
+
+                if (backPressCount >= 2) {
+                    Toast.makeText(this, "Нажмите ещё ${5 - backPressCount} раз(а) для выхода", Toast.LENGTH_SHORT).show()
+                }
+
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                okPressCount++
+                resetOkPressRunnable?.let { handler.removeCallbacks(it) }
+
+                if (okPressCount >= 3) {
+                    okPressCount = 0
+                    if (syncStatusCard.visibility == View.VISIBLE) {
+                        syncStatusCard.visibility = View.GONE
+                    } else {
+                        syncStatusCard.visibility = View.VISIBLE
+                    }
+                    return true
+                }
+
+                val r = Runnable {
+                    if (okPressCount == 1 && allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
+                        showInfoBanner(allChannels[currentPlayingIndex])
+                    }
+                    okPressCount = 0
+                }
+                resetOkPressRunnable = r
+                handler.postDelayed(r, 600)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
+                stepChannelInCurrentCategory(1)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                stepChannelInCurrentCategory(-1)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                openChannelPanelCenteredOnCurrent()
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                numPadPanel.visibility = View.VISIBLE
+                digitInputBuffer.clear()
+                tvNumpadDisplay.text = "---"
+                findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
+                return true
+            }
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun appendNumpadDigit(digit: Int) {
+        if (digitInputBuffer.length >= 4) return
+        digitInputBuffer.append(digit)
+        tvNumpadDisplay.text = digitInputBuffer.toString()
+        if (numPadPanel.visibility != View.VISIBLE) {
+            numPadPanel.visibility = View.VISIBLE
+            findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
+        }
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { executeNumpadSearch() }
+        digitAutoExecuteRunnable = r
+        handler.postDelayed(r, 5000)
+    }
+
+    private fun executeNumpadSearch() {
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        val targetNumber = digitInputBuffer.toString().toIntOrNull()
+        if (targetNumber != null) {
+            val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
+            if (foundIndex != -1) {
+                playChannelByIndex(foundIndex)
+                numPadPanel.visibility = View.GONE
+            } else {
+                Toast.makeText(applicationContext, "Канал не найден", Toast.LENGTH_SHORT).show()
+                tvNumpadDisplay.text = "---"
+            }
+        }
+        digitInputBuffer.clear()
+    }
+}
