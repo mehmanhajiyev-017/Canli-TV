@@ -109,6 +109,10 @@ class MainActivity : AppCompatActivity() {
     private var backPressCount = 0
     private var resetBackPressRunnable: Runnable? = null
 
+    // Счётчик тройного нажатия кнопки ОК
+    private var okPressCount = 0
+    private var resetOkPressRunnable: Runnable? = null
+
     private lateinit var rowDefaultBg: GradientDrawable
     private lateinit var rowFocusedBg: GradientDrawable
 
@@ -116,7 +120,6 @@ class MainActivity : AppCompatActivity() {
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
-    private var hideSyncCardRunnable: Runnable? = null
 
     private var isM3uLoading = false
     private var isEpgLoading = false
@@ -171,6 +174,7 @@ class MainActivity : AppCompatActivity() {
             cornerRadius = 16f
             setStroke(2, Color.parseColor("#55FFFFFF"))
         }
+        syncStatusCard.visibility = View.GONE
 
         numPadPanel.background = GradientDrawable().apply {
             setColor(Color.parseColor("#990B0E14"))
@@ -324,13 +328,12 @@ class MainActivity : AppCompatActivity() {
                 .setConnectTimeoutMs(10000)
                 .setReadTimeoutMs(10000)
 
-            // Легковесный стандартный буфер - видео идет без рывков и не опустошается
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    2500,  // minBufferMs (2.5 сек)
-                    12000, // maxBufferMs (12 сек)
-                    1000,  // bufferForPlaybackMs (1 сек)
-                    2000   // bufferForPlaybackAfterRebufferMs (2 сек)
+                    2500,
+                    12000,
+                    1000,
+                    2000
                 )
                 .build()
 
@@ -432,7 +435,6 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         initPlayer()
 
-        // Загружаем плейлист ТОЛЬКО если каналы еще не загружены в память
         if (allChannels.isEmpty()) {
             val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
             val savedM3u = prefs.getString("M3U_URL", "") ?: ""
@@ -443,7 +445,6 @@ class MainActivity : AppCompatActivity() {
                 showSettingsDialog()
             }
         } else {
-            // Если каналы уже есть, просто продолжаем играть текущий
             player?.playWhenReady = true
         }
     }
@@ -518,7 +519,7 @@ class MainActivity : AppCompatActivity() {
                     btn.background = focusedBg
                     btn.setTextColor(Color.WHITE)
                 } else {
-                    btn.background = defaultBg
+                    btn.background = defaultBtnBg
                     btn.setTextColor(Color.parseColor("#ECEFF1"))
                 }
             }
@@ -548,25 +549,10 @@ class MainActivity : AppCompatActivity() {
         btnSaveM3u.requestFocus()
     }
 
-    private fun showSyncCard() {
-        syncStatusCard.visibility = View.VISIBLE
-        hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
-    }
-
-    private fun checkAndScheduleHideSyncCard() {
-        if (!isM3uLoading && !isEpgLoading) {
-            hideSyncCardRunnable?.let { handler.removeCallbacks(it) }
-            val r = Runnable { syncStatusCard.visibility = View.GONE }
-            hideSyncCardRunnable = r
-            handler.postDelayed(r, 4000)
-        }
-    }
-
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         if (isM3uLoading) return
         isM3uLoading = true
         runOnUiThread { 
-            showSyncCard()
             tvSyncChannels.text = "Каналы: Загрузка..."
             tvSyncLogos.text = "Логотипы: 0"
         }
@@ -592,7 +578,6 @@ class MainActivity : AppCompatActivity() {
                     if (allChannels.isEmpty()) {
                         showSettingsDialog()
                     }
-                    checkAndScheduleHideSyncCard()
                 }
             }
 
@@ -605,7 +590,6 @@ class MainActivity : AppCompatActivity() {
                         if (allChannels.isEmpty()) {
                             showSettingsDialog()
                         }
-                        checkAndScheduleHideSyncCard()
                     }
                     return
                 }
@@ -627,7 +611,6 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         tvSyncChannels.text = "Каналы: ${allChannels.size}"
                         tvSyncLogos.text = "Логотипы: $logosCount"
-                        checkAndScheduleHideSyncCard()
 
                         setupCategoryAdapter()
                         val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
@@ -646,7 +629,6 @@ class MainActivity : AppCompatActivity() {
                                 currentPlayingIndex = resumeIndex
                             }
 
-                            // Запускаем EPG строго один раз только после полного старта видео
                             val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                             if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
                                 handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 12000)
@@ -766,7 +748,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         runOnUiThread {
-            showSyncCard()
             tvSyncPrograms.text = "Программы: Скачивание..."
         }
 
@@ -787,7 +768,6 @@ class MainActivity : AppCompatActivity() {
                 isEpgLoading = false
                 runOnUiThread {
                     tvSyncPrograms.text = "Программы: Ошибка"
-                    checkAndScheduleHideSyncCard()
                 }
             }
 
@@ -795,7 +775,6 @@ class MainActivity : AppCompatActivity() {
                 val body = response.body
                 if (!response.isSuccessful || body == null) {
                     isEpgLoading = false
-                    runOnUiThread { checkAndScheduleHideSyncCard() }
                     return
                 }
 
@@ -818,7 +797,6 @@ class MainActivity : AppCompatActivity() {
                         isEpgLoading = false
                         runOnUiThread {
                             tvSyncPrograms.text = "Программы: Ошибка"
-                            checkAndScheduleHideSyncCard()
                         }
                     }
                 }.start()
@@ -978,7 +956,6 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка" }
         } finally {
             isEpgLoading = false
-            runOnUiThread { checkAndScheduleHideSyncCard() }
         }
     }
 
@@ -1416,10 +1393,30 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                if (allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
-                    showInfoBanner(allChannels[currentPlayingIndex])
+                // Обработка тройного нажатия кнопки ОК для показа/скрытия окна синхронизации
+                okPressCount++
+                resetOkPressRunnable?.let { handler.removeCallbacks(it) }
+
+                if (okPressCount >= 3) {
+                    okPressCount = 0
+                    if (syncStatusCard.visibility == View.VISIBLE) {
+                        syncStatusCard.visibility = View.GONE
+                    } else {
+                        syncStatusCard.visibility = View.VISIBLE
+                    }
                     return true
                 }
+
+                val r = Runnable {
+                    // Одиночное нажатие ОК показывает инфо-баннер
+                    if (okPressCount == 1 && allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
+                        showInfoBanner(allChannels[currentPlayingIndex])
+                    }
+                    okPressCount = 0
+                }
+                resetOkPressRunnable = r
+                handler.postDelayed(r, 600)
+                return true
             }
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
                 stepChannelInCurrentCategory(1)
