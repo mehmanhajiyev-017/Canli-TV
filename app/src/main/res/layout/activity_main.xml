@@ -189,7 +189,7 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- Правая панель: Цифровой ввод (Numpad) -->
+    <!-- Правая панель: Numpad -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="260dp"
@@ -237,7 +237,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Окно настроек (без лишних кнопок обновления) -->
+    <!-- Окно настроек с кнопками обновления -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -250,7 +250,7 @@
         android:visibility="gone">
 
         <LinearLayout
-            android:layout_width="600dp"
+            android:layout_width="650dp"
             android:layout_height="wrap_content"
             android:background="#151A22"
             android:orientation="vertical"
@@ -294,12 +294,20 @@
 
                 <Button
                     android:id="@+id/btnSaveM3u"
-                    android:layout_width="120dp"
+                    android:layout_width="110dp"
                     android:layout_height="50dp"
                     android:layout_marginStart="10dp"
                     android:text="СОХРАНИТЬ"
                     android:textSize="12sp"
                     android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnRefreshM3u"
+                    android:layout_width="52dp"
+                    android:layout_height="50dp"
+                    android:layout_marginStart="6dp"
+                    android:text="↻"
+                    android:textSize="18sp" />
             </LinearLayout>
 
             <!-- EPG Секция -->
@@ -331,12 +339,20 @@
 
                 <Button
                     android:id="@+id/btnSaveEpg"
-                    android:layout_width="120dp"
+                    android:layout_width="110dp"
                     android:layout_height="50dp"
                     android:layout_marginStart="10dp"
                     android:text="СОХРАНИТЬ"
                     android:textSize="12sp"
                     android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnRefreshEpg"
+                    android:layout_width="52dp"
+                    android:layout_height="50dp"
+                    android:layout_marginStart="6dp"
+                    android:text="↻"
+                    android:textSize="18sp" />
             </LinearLayout>
 
             <!-- Кнопка Закрыть -->
