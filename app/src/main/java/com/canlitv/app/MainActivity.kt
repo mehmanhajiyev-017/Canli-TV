@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var numPadPanel: View
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
+    private lateinit var mobileTopBar: View
 
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
@@ -83,6 +84,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCloseSettings: Button
     private lateinit var btnToggleMode: Button
     private lateinit var btnOpenSettings: View
+
+    private lateinit var btnMobileCategories: Button
+    private lateinit var btnMobileChannels: Button
+    private lateinit var btnMobileSettings: Button
+
     private lateinit var recyclerViewChannels: RecyclerView
     private lateinit var recyclerViewCategories: RecyclerView
     private lateinit var tvNumpadDisplay: TextView
@@ -125,6 +131,7 @@ class MainActivity : AppCompatActivity() {
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
+    private var hideTopBarRunnable: Runnable? = null
 
     @Volatile
     private var isM3uLoading = false
@@ -173,6 +180,7 @@ class MainActivity : AppCompatActivity() {
         numPadPanel = findViewById(R.id.numPadPanel)
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
+        mobileTopBar = findViewById(R.id.mobileTopBar)
 
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
@@ -183,6 +191,11 @@ class MainActivity : AppCompatActivity() {
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnToggleMode = findViewById(R.id.btnToggleMode)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
+
+        btnMobileCategories = findViewById(R.id.btnMobileCategories)
+        btnMobileChannels = findViewById(R.id.btnMobileChannels)
+        btnMobileSettings = findViewById(R.id.btnMobileSettings)
+
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
         recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
         tvNumpadDisplay = findViewById(R.id.tvNumpadDisplay)
@@ -218,15 +231,36 @@ class MainActivity : AppCompatActivity() {
         initNumpadButtons()
         initSettingsPanelFocus()
 
+        // Mobildə ekrana toxunduqda menyu və ya üst idarəetmə panelini açmaq
         playerView.setOnClickListener {
             if (!isTvMode) {
                 if (channelPanel.visibility == View.VISIBLE || categoryPanel.visibility == View.VISIBLE) {
                     channelPanel.visibility = View.GONE
                     categoryPanel.visibility = View.GONE
+                    mobileTopBar.visibility = View.GONE
                 } else {
-                    openChannelPanelCenteredOnCurrent()
+                    showMobileTopBarTemporarily()
                 }
             }
+        }
+
+        btnMobileCategories.setOnClickListener {
+            mobileTopBar.visibility = View.GONE
+            channelPanel.visibility = View.GONE
+            categoryPanel.visibility = View.VISIBLE
+        }
+
+        btnMobileChannels.setOnClickListener {
+            mobileTopBar.visibility = View.GONE
+            categoryPanel.visibility = View.GONE
+            openChannelPanelCenteredOnCurrent()
+        }
+
+        btnMobileSettings.setOnClickListener {
+            mobileTopBar.visibility = View.GONE
+            categoryPanel.visibility = View.GONE
+            channelPanel.visibility = View.GONE
+            showSettingsDialog()
         }
 
         val settingsDefaultBg = GradientDrawable().apply {
@@ -295,7 +329,7 @@ class MainActivity : AppCompatActivity() {
             applyAppMode(isTvMode)
             Toast.makeText(
                 applicationContext,
-                if (isTvMode) "TV Rejimi Aktivdir" else "Mobil Rejim Aktivdir",
+                if (isTvMode) "Режим ТВ активирован" else "Мобильный режим активирован",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -308,7 +342,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "M3U linkini daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Введите правильный URL M3U", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -318,7 +352,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Ссылка M3U не введена", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -330,7 +364,7 @@ class MainActivity : AppCompatActivity() {
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "EPG linkini daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Введите правильный URL EPG", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -341,7 +375,7 @@ class MainActivity : AppCompatActivity() {
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Ссылка EPG не введена", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -350,11 +384,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showMobileTopBarTemporarily() {
+        mobileTopBar.visibility = View.VISIBLE
+        hideTopBarRunnable?.let { handler.removeCallbacks(it) }
+        val r = Runnable { mobileTopBar.visibility = View.GONE }
+        hideTopBarRunnable = r
+        handler.postDelayed(r, 4000)
+    }
+
     private fun applyAppMode(tvMode: Boolean) {
         val density = resources.displayMetrics.density
         if (tvMode) {
             btnToggleMode.text = "📺"
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            mobileTopBar.visibility = View.GONE
             categoryPanel.layoutParams.width = (320 * density).toInt()
             channelPanel.layoutParams.width = (420 * density).toInt()
         } else {
@@ -596,8 +639,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         runOnUiThread { 
-            tvSyncChannels.text = "Kanallar: Yüklənir..."
-            tvSyncLogos.text = "Loqolar: 0"
+            tvSyncChannels.text = "Каналы: Загрузка..."
+            tvSyncLogos.text = "Логотипы: 0"
         }
 
         val request = try {
@@ -609,7 +652,7 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
             synchronized(loadingLock) { isM3uLoading = false }
             runOnUiThread {
-                tvSyncChannels.text = "Kanallar: Link xətası"
+                tvSyncChannels.text = "Каналы: Ошибка ссылки"
                 if (allChannels.isEmpty()) showSettingsDialog()
             }
             return
@@ -619,7 +662,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 synchronized(loadingLock) { isM3uLoading = false }
                 runOnUiThread {
-                    tvSyncChannels.text = "Kanallar: Yüklənmə xətası"
+                    tvSyncChannels.text = "Каналы: Ошибка загрузки"
                     if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                 }
             }
@@ -629,7 +672,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful || body.isNullOrBlank()) {
                     synchronized(loadingLock) { isM3uLoading = false }
                     runOnUiThread {
-                        tvSyncChannels.text = "Kanallar: Boş cavab"
+                        tvSyncChannels.text = "Каналы: Пустой ответ"
                         if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                     }
                     return
@@ -655,8 +698,8 @@ class MainActivity : AppCompatActivity() {
                             synchronized(loadingLock) { isM3uLoading = false }
                             if (isFinishing || isDestroyed) return@runOnUiThread
 
-                            tvSyncChannels.text = "Kanallar: $channelCount"
-                            tvSyncLogos.text = "Loqolar: $logosCount"
+                            tvSyncChannels.text = "Каналы: $channelCount"
+                            tvSyncLogos.text = "Логотипы: $logosCount"
 
                             setupCategoryAdapter()
                             val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
@@ -684,7 +727,7 @@ class MainActivity : AppCompatActivity() {
                     } catch (_: Exception) {
                         synchronized(loadingLock) { isM3uLoading = false }
                         runOnUiThread {
-                            tvSyncChannels.text = "Kanallar: Emal xətası"
+                            tvSyncChannels.text = "Каналы: Ошибка обработки"
                             if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                         }
                     }
@@ -801,7 +844,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        runOnUiThread { tvSyncPrograms.text = "Proqramlar: Yüklənir..." }
+        runOnUiThread { tvSyncPrograms.text = "Программы: Скачивание..." }
 
         val request = try {
             Request.Builder()
@@ -810,14 +853,14 @@ class MainActivity : AppCompatActivity() {
                 .build()
         } catch (_: Exception) {
             synchronized(loadingLock) { isEpgLoading = false }
-            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Link xətası" }
+            runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка ссылки" }
             return
         }
 
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 synchronized(loadingLock) { isEpgLoading = false }
-                runOnUiThread { tvSyncPrograms.text = "Proqramlar: Şəbəkə xətası" }
+                runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка сети" }
             }
 
             override fun onResponse(call: Call, response: Response) {
@@ -852,7 +895,7 @@ class MainActivity : AppCompatActivity() {
                     }.start()
                 } else {
                     synchronized(loadingLock) { isEpgLoading = false }
-                    runOnUiThread { tvSyncPrograms.text = "Proqramlar: Fayl xətası" }
+                    runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка файла" }
                 }
             }
         })
@@ -860,7 +903,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun parseEpgFromFile(file: File) {
         try {
-            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Emal edilir..." }
+            runOnUiThread { tvSyncPrograms.text = "Программы: Обработка..." }
 
             val channelKeyMap = HashMap<String, String>(allChannels.size * 2)
             for (ch in allChannels) {
@@ -998,15 +1041,15 @@ class MainActivity : AppCompatActivity() {
             currentProgramsMap.putAll(livePrograms)
 
             runOnUiThread {
-                tvSyncPrograms.text = "Proqramlar: ${currentProgramsMap.size}"
-                tvSyncLogos.text = "Loqolar: ${allChannels.count { it.logoUrl.isNotEmpty() }}"
+                tvSyncPrograms.text = "Программы: ${currentProgramsMap.size}"
+                tvSyncLogos.text = "Логотипы: ${allChannels.count { it.logoUrl.isNotEmpty() }}"
                 recyclerViewChannels.adapter?.notifyDataSetChanged()
                 if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
                     showInfoBanner(allChannels[currentPlayingIndex])
                 }
             }
         } catch (_: Exception) {
-            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Xəta" }
+            runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка" }
         } finally {
             synchronized(loadingLock) { isEpgLoading = false }
         }
@@ -1342,189 +1385,4 @@ class MainActivity : AppCompatActivity() {
                     .override(120, 120)
                     .into(imgBannerLogo!!)
             } else {
-                Glide.with(this).clear(imgBannerLogo!!)
-                imgBannerLogo?.setImageDrawable(null)
-                imgBannerLogo?.visibility = View.GONE
-            }
-        }
-
-        infoBanner.visibility = View.VISIBLE
-        bannerRunnable?.let { handler.removeCallbacks(it) }
-        val r = Runnable { infoBanner.visibility = View.GONE }
-        bannerRunnable = r
-        handler.postDelayed(r, 4500)
-    }
-
-    private fun exitApplicationCompletely() {
-        player?.stop()
-        player?.release()
-        player = null
-        finishAffinity()
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (linkDialogPanel.visibility == View.VISIBLE) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
-            return super.onKeyDown(keyCode, event)
-        }
-
-        if (numPadPanel.visibility == View.VISIBLE) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_BACK -> {
-                    digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
-                    digitInputBuffer.clear(); numPadPanel.visibility = View.GONE; return true
-                }
-                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
-            }
-            return super.onKeyDown(keyCode, event)
-        }
-
-        if (categoryPanel.visibility == View.VISIBLE) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_BACK -> {
-                    categoryPanel.visibility = View.GONE
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    btnOpenSettings.requestFocus()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    categoryPanel.visibility = View.GONE
-                    channelPanel.visibility = View.VISIBLE
-                    focusCurrentChannelCentered()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                    return super.onKeyDown(keyCode, event)
-                }
-            }
-        }
-
-        if (channelPanel.visibility == View.VISIBLE) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    channelPanel.visibility = View.GONE
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    channelPanel.visibility = View.GONE
-                    categoryPanel.visibility = View.VISIBLE
-                    val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
-                    recyclerViewCategories.post {
-                        recyclerViewCategories.scrollToPosition(catIndex)
-                        val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
-                        if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
-                    }
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                    return super.onKeyDown(keyCode, event)
-                }
-            }
-        }
-
-        when (keyCode) {
-            KeyEvent.KEYCODE_BACK -> {
-                backPressCount++
-                resetBackPressRunnable?.let { handler.removeCallbacks(it) }
-
-                if (backPressCount >= 5) {
-                    exitApplicationCompletely()
-                    return true
-                }
-
-                val r = Runnable { backPressCount = 0 }
-                resetBackPressRunnable = r
-                handler.postDelayed(r, 2000)
-
-                if (previousPlayingIndex in allChannels.indices && previousPlayingIndex != currentPlayingIndex) {
-                    playChannelByIndex(previousPlayingIndex)
-                }
-
-                if (backPressCount >= 2) {
-                    Toast.makeText(this, "Çıxış üçün daha ${5 - backPressCount} dəfə basın", Toast.LENGTH_SHORT).show()
-                }
-
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                okPressCount++
-                resetOkPressRunnable?.let { handler.removeCallbacks(it) }
-
-                if (okPressCount >= 3) {
-                    okPressCount = 0
-                    if (syncStatusCard.visibility == View.VISIBLE) {
-                        syncStatusCard.visibility = View.GONE
-                    } else {
-                        syncStatusCard.visibility = View.VISIBLE
-                    }
-                    return true
-                }
-
-                val r = Runnable {
-                    if (okPressCount == 1 && allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
-                        showInfoBanner(allChannels[currentPlayingIndex])
-                    }
-                    okPressCount = 0
-                }
-                resetOkPressRunnable = r
-                handler.postDelayed(r, 600)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP -> {
-                stepChannelInCurrentCategory(1)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                stepChannelInCurrentCategory(-1)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                openChannelPanelCenteredOnCurrent()
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                numPadPanel.visibility = View.VISIBLE
-                digitInputBuffer.clear()
-                tvNumpadDisplay.text = "---"
-                findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
-                return true
-            }
-            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    private fun appendNumpadDigit(digit: Int) {
-        if (digitInputBuffer.length >= 4) return
-        digitInputBuffer.append(digit)
-        tvNumpadDisplay.text = digitInputBuffer.toString()
-        if (numPadPanel.visibility != View.VISIBLE) {
-            numPadPanel.visibility = View.VISIBLE
-            findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
-        }
-        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
-        val r = Runnable { executeNumpadSearch() }
-        digitAutoExecuteRunnable = r
-        handler.postDelayed(r, 5000)
-    }
-
-    private fun executeNumpadSearch() {
-        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
-        val targetNumber = digitInputBuffer.toString().toIntOrNull()
-        if (targetNumber != null) {
-            val foundIndex = allChannels.indexOfFirst { it.number == targetNumber }
-            if (foundIndex != -1) {
-                playChannelByIndex(foundIndex)
-                numPadPanel.visibility = View.GONE
-            } else {
-                Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
-                tvNumpadDisplay.text = "---"
-            }
-        }
-        digitInputBuffer.clear()
-    }
-}
+                Glide.with(this).clear(
