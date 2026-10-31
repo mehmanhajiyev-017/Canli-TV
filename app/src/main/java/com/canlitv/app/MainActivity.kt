@@ -16,7 +16,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -74,21 +73,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var numPadPanel: View
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
-    private lateinit var mobileTopBar: View
 
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
-    private lateinit var btnRefreshM3u: Button
     private lateinit var btnSaveEpg: Button
-    private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
-    private lateinit var btnToggleMode: ImageButton
     private lateinit var btnOpenSettings: View
-
-    private lateinit var btnMobileCategories: Button
-    private lateinit var btnMobileChannels: Button
-    private lateinit var btnMobileSettings: Button
 
     private lateinit var recyclerViewChannels: RecyclerView
     private lateinit var recyclerViewCategories: RecyclerView
@@ -121,8 +112,6 @@ class MainActivity : AppCompatActivity() {
     private var okPressCount = 0
     private var resetOkPressRunnable: Runnable? = null
 
-    private var isTvMode = true
-
     private lateinit var rowDefaultBg: GradientDrawable
     private lateinit var rowFocusedBg: GradientDrawable
     private lateinit var defaultBtnBg: GradientDrawable
@@ -132,7 +121,6 @@ class MainActivity : AppCompatActivity() {
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
-    private var hideTopBarRunnable: Runnable? = null
 
     @Volatile
     private var isM3uLoading = false
@@ -152,6 +140,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         setContentView(R.layout.activity_main)
 
         rowDefaultBg = GradientDrawable().apply {
@@ -181,21 +170,13 @@ class MainActivity : AppCompatActivity() {
         numPadPanel = findViewById(R.id.numPadPanel)
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
-        mobileTopBar = findViewById(R.id.mobileTopBar)
 
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveM3u = findViewById(R.id.btnSaveM3u)
-        btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
         btnSaveEpg = findViewById(R.id.btnSaveEpg)
-        btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
-        btnToggleMode = findViewById(R.id.btnToggleMode)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
-
-        btnMobileCategories = findViewById(R.id.btnMobileCategories)
-        btnMobileChannels = findViewById(R.id.btnMobileChannels)
-        btnMobileSettings = findViewById(R.id.btnMobileSettings)
 
         recyclerViewChannels = findViewById(R.id.recyclerViewChannels)
         recyclerViewCategories = findViewById(R.id.recyclerViewCategories)
@@ -218,50 +199,15 @@ class MainActivity : AppCompatActivity() {
         syncStatusCard.visibility = View.GONE
 
         numPadPanel.background = GradientDrawable().apply {
-            setColor(Color.parseColor("#990B0E14"))
+            setColor(Color.parseColor("#E60A0E17"))
             cornerRadius = 20f
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
-
-        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        isTvMode = prefs.getBoolean("IS_TV_MODE", true)
-        applyAppMode(isTvMode)
 
         detectTimezoneByIp()
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
-
-        playerView.setOnClickListener {
-            if (!isTvMode) {
-                if (channelPanel.visibility == View.VISIBLE || categoryPanel.visibility == View.VISIBLE) {
-                    channelPanel.visibility = View.GONE
-                    categoryPanel.visibility = View.GONE
-                    mobileTopBar.visibility = View.GONE
-                } else {
-                    showMobileTopBarTemporarily()
-                }
-            }
-        }
-
-        btnMobileCategories.setOnClickListener {
-            mobileTopBar.visibility = View.GONE
-            channelPanel.visibility = View.GONE
-            categoryPanel.visibility = View.VISIBLE
-        }
-
-        btnMobileChannels.setOnClickListener {
-            mobileTopBar.visibility = View.GONE
-            categoryPanel.visibility = View.GONE
-            openChannelPanelCenteredOnCurrent()
-        }
-
-        btnMobileSettings.setOnClickListener {
-            mobileTopBar.visibility = View.GONE
-            categoryPanel.visibility = View.GONE
-            channelPanel.visibility = View.GONE
-            showSettingsDialog()
-        }
 
         val settingsDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
@@ -276,8 +222,7 @@ class MainActivity : AppCompatActivity() {
 
         btnOpenSettings.background = settingsDefaultBg
         btnOpenSettings.setOnClickListener {
-            categoryPanel.visibility = View.GONE
-            channelPanel.visibility = View.GONE
+            closeAllPanels()
             showSettingsDialog()
         }
 
@@ -323,20 +268,10 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
 
-        btnToggleMode.setOnClickListener {
-            isTvMode = !isTvMode
-            prefs.edit().putBoolean("IS_TV_MODE", isTvMode).apply()
-            applyAppMode(isTvMode)
-            Toast.makeText(
-                applicationContext,
-                if (isTvMode) "Режим ТВ активирован" else "Мобильный режим активирован",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
+                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
                 prefs.edit().putString("M3U_URL", url).apply()
                 linkDialogPanel.visibility = View.GONE
                 currentPlayingIndex = -1
@@ -346,19 +281,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnRefreshM3u.setOnClickListener {
-            val url = etM3uUrl.text.toString().trim()
-            if (url.isNotEmpty() && url.startsWith("http")) {
-                linkDialogPanel.visibility = View.GONE
-                fetchM3U(url, autoPlay = false)
-            } else {
-                Toast.makeText(applicationContext, "Ссылка M3U не введена", Toast.LENGTH_SHORT).show()
-            }
-        }
-
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
+                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
                 prefs.edit().putString("EPG_URL", epgUrl).apply()
                 linkDialogPanel.visibility = View.GONE
                 deleteLocalEpgCache()
@@ -368,46 +294,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnRefreshEpg.setOnClickListener {
-            val epgUrl = etEpgUrl.text.toString().trim()
-            if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
-                linkDialogPanel.visibility = View.GONE
-                deleteLocalEpgCache()
-                downloadAndParseEpg(epgUrl)
-            } else {
-                Toast.makeText(applicationContext, "Ссылка EPG не введена", Toast.LENGTH_SHORT).show()
-            }
-        }
-
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
         }
     }
 
-    private fun showMobileTopBarTemporarily() {
-        mobileTopBar.visibility = View.VISIBLE
-        hideTopBarRunnable?.let { handler.removeCallbacks(it) }
-        val r = Runnable { mobileTopBar.visibility = View.GONE }
-        hideTopBarRunnable = r
-        handler.postDelayed(r, 4000)
-    }
-
-    private fun applyAppMode(tvMode: Boolean) {
-        val density = resources.displayMetrics.density
-        if (tvMode) {
-            btnToggleMode.setImageResource(R.drawable.ic_mode_tv)
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            mobileTopBar.visibility = View.GONE
-            categoryPanel.layoutParams.width = (320 * density).toInt()
-            channelPanel.layoutParams.width = (420 * density).toInt()
-        } else {
-            btnToggleMode.setImageResource(R.drawable.ic_mode_mobile)
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            categoryPanel.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
-            channelPanel.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
-        }
-        categoryPanel.requestLayout()
-        channelPanel.requestLayout()
+    private fun closeAllPanels() {
+        categoryPanel.visibility = View.GONE
+        channelPanel.visibility = View.GONE
+        numPadPanel.visibility = View.GONE
+        linkDialogPanel.visibility = View.GONE
+        infoBanner.visibility = View.GONE
+        digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+        digitInputBuffer.clear()
     }
 
     private fun detectTimezoneByIp() {
@@ -494,30 +393,24 @@ class MainActivity : AppCompatActivity() {
         for (input in inputs) {
             input.backgroundTintList = null
             val defaultEditBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#1A212D"))
-                cornerRadius = 12f
-                setStroke(2, Color.parseColor("#55FFFFFF"))
+                setColor(Color.parseColor("#0E121A"))
+                cornerRadius = 10f
+                setStroke(2, Color.parseColor("#44FFFFFF"))
             }
             val focusedEditBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#1A212D"))
-                cornerRadius = 12f
+                setColor(Color.parseColor("#0E121A"))
+                cornerRadius = 10f
                 setStroke(3, Color.parseColor("#2979FF"))
             }
             input.background = defaultEditBg
             input.setTextColor(Color.WHITE)
-            input.setHintTextColor(Color.parseColor("#90A4AE"))
+            input.setHintTextColor(Color.parseColor("#78909C"))
             input.setOnFocusChangeListener { _, hasFocus ->
                 input.background = if (hasFocus) focusedEditBg else defaultEditBg
             }
         }
 
-        btnToggleMode.backgroundTintList = null
-        btnToggleMode.background = defaultBtnBg
-        btnToggleMode.setOnFocusChangeListener { _, hasFocus ->
-            btnToggleMode.background = if (hasFocus) focusedBtnBg else defaultBtnBg
-        }
-
-        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnSaveEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -633,7 +526,6 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
-        applyAppMode(isTvMode)
         linkDialogPanel.visibility = View.VISIBLE
         btnSaveM3u.requestFocus()
     }
@@ -1115,8 +1007,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openChannelPanelCenteredOnCurrent() {
+        closeAllPanels()
         channelPanel.visibility = View.VISIBLE
-        categoryPanel.visibility = View.GONE
 
         if (allChannels.isEmpty() || currentPlayingIndex !in allChannels.indices) {
             filterChannels(selectedCategory)
@@ -1415,22 +1307,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // 1. Окно настроек
         if (linkDialogPanel.visibility == View.VISIBLE) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) { linkDialogPanel.visibility = View.GONE; return true }
-            return super.onKeyDown(keyCode, event)
-        }
-
-        if (numPadPanel.visibility == View.VISIBLE) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_BACK -> {
-                    digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
-                    digitInputBuffer.clear(); numPadPanel.visibility = View.GONE; return true
-                }
-                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                linkDialogPanel.visibility = View.GONE
+                return true
             }
             return super.onKeyDown(keyCode, event)
         }
 
+        // 2. Цифровой ввод (Numpad)
+        if (numPadPanel.visibility == View.VISIBLE) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> {
+                    digitAutoExecuteRunnable?.let { handler.removeCallbacks(it) }
+                    digitInputBuffer.clear()
+                    numPadPanel.visibility = View.GONE
+                    return true
+                }
+                in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
+                    appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0)
+                    return true
+                }
+            }
+            return super.onKeyDown(keyCode, event)
+        }
+
+        // 3. Панель категорий
         if (categoryPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -1454,6 +1357,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 4. Панель каналов
         if (channelPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -1478,6 +1382,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 5. Управление плеером (когда все меню закрыты)
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
                 backPressCount++
@@ -1535,17 +1440,25 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
+                // Стрелка влево: закрывает остальные панели и открывает только каналы
+                closeAllPanels()
                 openChannelPanelCenteredOnCurrent()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                // Стрелка вправо: закрывает остальные панели и открывает Numpad
+                closeAllPanels()
                 numPadPanel.visibility = View.VISIBLE
                 digitInputBuffer.clear()
                 tvNumpadDisplay.text = "---"
                 findViewById<Button>(R.id.btn1)?.post { findViewById<Button>(R.id.btn1)?.requestFocus() }
                 return true
             }
-            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> { appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0); return true }
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> {
+                closeAllPanels()
+                appendNumpadDigit(keyCode - KeyEvent.KEYCODE_0)
+                return true
+            }
         }
         return super.onKeyDown(keyCode, event)
     }
