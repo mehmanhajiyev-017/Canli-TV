@@ -13,7 +13,6 @@
         android:focusable="false"
         app:use_controller="false" />
 
-    <!-- Mobil Yuxarı İdarəetmə Paneli (Yalnız mobil rejimdə və ekrana toxunduqda görünür) -->
     <LinearLayout
         android:id="@+id/mobileTopBar"
         android:layout_width="match_parent"
@@ -103,7 +102,6 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Qruplar / Kateqoriyalar Paneli -->
     <LinearLayout
         android:id="@+id/categoryPanel"
         android:layout_width="320dp"
@@ -159,7 +157,6 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Kanallar Paneli -->
     <LinearLayout
         android:id="@+id/channelPanel"
         android:layout_width="420dp"
@@ -176,7 +173,6 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- İnfo Banner -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
@@ -233,7 +229,6 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- Rəqəmsal Pult Paneli -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="260dp"
@@ -280,7 +275,6 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Tənzimləmələr Pəncərəsi -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -400,15 +394,15 @@
                 android:gravity="end|center_vertical"
                 android:orientation="horizontal">
 
-                <Button
+                <ImageButton
                     android:id="@+id/btnToggleMode"
-                    android:layout_width="56dp"
+                    android:layout_width="54dp"
                     android:layout_height="50dp"
                     android:layout_marginEnd="12dp"
                     android:clickable="true"
                     android:focusable="true"
-                    android:text="📺"
-                    android:textSize="20sp" />
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_mode_tv" />
 
                 <Button
                     android:id="@+id/btnCloseSettings"
