@@ -109,17 +109,19 @@ class MainActivity : AppCompatActivity() {
     private var backPressCount = 0
     private var resetBackPressRunnable: Runnable? = null
 
-    // Счётчик тройного нажатия кнопки ОК
     private var okPressCount = 0
     private var resetOkPressRunnable: Runnable? = null
 
     private lateinit var rowDefaultBg: GradientDrawable
     private lateinit var rowFocusedBg: GradientDrawable
+    private lateinit var defaultBtnBg: GradientDrawable
+    private lateinit var focusedBtnBg: GradientDrawable
 
     private val handler = Handler(Looper.getMainLooper())
     private val digitInputBuffer = StringBuilder()
     private var bannerRunnable: Runnable? = null
     private var digitAutoExecuteRunnable: Runnable? = null
+    private var hideSyncCardRunnable: Runnable? = null
 
     private var isM3uLoading = false
     private var isEpgLoading = false
@@ -138,6 +140,17 @@ class MainActivity : AppCompatActivity() {
         rowFocusedBg = GradientDrawable().apply {
             setColor(Color.parseColor("#402979FF"))
             cornerRadius = 12f
+            setStroke(2, Color.parseColor("#80FFFFFF"))
+        }
+
+        defaultBtnBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#4D151A22"))
+            cornerRadius = 14f
+            setStroke(2, Color.parseColor("#55FFFFFF"))
+        }
+        focusedBtnBg = GradientDrawable().apply {
+            setColor(Color.parseColor("#402979FF"))
+            cornerRadius = 14f
             setStroke(2, Color.parseColor("#80FFFFFF"))
         }
 
@@ -407,16 +420,6 @@ class MainActivity : AppCompatActivity() {
         val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
-            val defaultBtnBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#4D151A22"))
-                cornerRadius = 14f
-                setStroke(2, Color.parseColor("#55FFFFFF"))
-            }
-            val focusedBtnBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#402979FF"))
-                cornerRadius = 14f
-                setStroke(2, Color.parseColor("#80FFFFFF"))
-            }
             btn.background = defaultBtnBg
             btn.setTextColor(Color.parseColor("#ECEFF1"))
             btn.setOnFocusChangeListener { _, hasFocus ->
@@ -502,21 +505,11 @@ class MainActivity : AppCompatActivity() {
         for (id in buttonIds) {
             val btn = findViewById<Button>(id) ?: continue
             btn.backgroundTintList = null
-            val defaultBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#4D151A22"))
-                cornerRadius = 14f
-                setStroke(2, Color.parseColor("#33FFFFFF"))
-            }
-            val focusedBg = GradientDrawable().apply {
-                setColor(Color.parseColor("#402979FF"))
-                cornerRadius = 14f
-                setStroke(2, Color.parseColor("#80FFFFFF"))
-            }
-            btn.background = defaultBg
+            btn.background = defaultBtnBg
             btn.setTextColor(Color.parseColor("#ECEFF1"))
             btn.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
-                    btn.background = focusedBg
+                    btn.background = focusedBtnBg
                     btn.setTextColor(Color.WHITE)
                 } else {
                     btn.background = defaultBtnBg
@@ -1393,7 +1386,6 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                // Обработка тройного нажатия кнопки ОК для показа/скрытия окна синхронизации
                 okPressCount++
                 resetOkPressRunnable?.let { handler.removeCallbacks(it) }
 
@@ -1408,7 +1400,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val r = Runnable {
-                    // Одиночное нажатие ОК показывает инфо-баннер
                     if (okPressCount == 1 && allChannels.isNotEmpty() && currentPlayingIndex in allChannels.indices) {
                         showInfoBanner(allChannels[currentPlayingIndex])
                     }
