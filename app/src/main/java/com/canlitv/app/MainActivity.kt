@@ -77,7 +77,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
+    private lateinit var btnRefreshM3u: Button
     private lateinit var btnSaveEpg: Button
+    private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
 
@@ -174,7 +176,9 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveM3u = findViewById(R.id.btnSaveM3u)
+        btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
         btnSaveEpg = findViewById(R.id.btnSaveEpg)
+        btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
 
@@ -281,6 +285,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        btnRefreshM3u.setOnClickListener {
+            val url = etM3uUrl.text.toString().trim()
+            if (url.isNotEmpty() && url.startsWith("http")) {
+                linkDialogPanel.visibility = View.GONE
+                fetchM3U(url, autoPlay = false)
+            } else {
+                Toast.makeText(applicationContext, "Ссылка M3U не введена", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
             if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
@@ -291,6 +305,17 @@ class MainActivity : AppCompatActivity() {
                 downloadAndParseEpg(epgUrl)
             } else {
                 Toast.makeText(applicationContext, "Введите правильный URL EPG", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnRefreshEpg.setOnClickListener {
+            val epgUrl = etEpgUrl.text.toString().trim()
+            if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
+                linkDialogPanel.visibility = View.GONE
+                deleteLocalEpgCache()
+                downloadAndParseEpg(epgUrl)
+            } else {
+                Toast.makeText(applicationContext, "Ссылка EPG не введена", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -410,7 +435,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnSaveEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -530,6 +555,7 @@ class MainActivity : AppCompatActivity() {
         btnSaveM3u.requestFocus()
     }
 
+    // TVirl-стиль: потоковый разбор плейлиста M3U
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         synchronized(loadingLock) {
             if (isM3uLoading) return
@@ -725,6 +751,7 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    // TVirl-стиль: фоновая загрузка сжатого телегида с локальным дисковым кэшированием
     private fun downloadAndParseEpg(epgUrl: String) {
         synchronized(loadingLock) {
             if (isEpgLoading) return
@@ -799,6 +826,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // TVirl-стиль: разбор XMLTV потоком через GZIPInputStream и сопоставление только текущего эфира
     private fun parseEpgFromFile(file: File) {
         try {
             runOnUiThread { tvSyncPrograms.text = "Программы: Обработка..." }
@@ -868,6 +896,7 @@ class MainActivity : AppCompatActivity() {
                             progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
                             val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
 
+                            // Берем только передачу текущего эфира и только если программа для канала еще не найдена
                             if (ourKey != null && !livePrograms.containsKey(ourKey)) {
                                 val startStr = parser.getAttributeValue(null, "start") ?: ""
                                 val stopStr = parser.getAttributeValue(null, "stop") ?: ""
@@ -1316,7 +1345,7 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // 2. Цифровой ввод (Numpad)
+        // 2. Numpad
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -1382,7 +1411,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 5. Управление плеером (когда все меню закрыты)
+        // 5. Управление плеером
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
                 backPressCount++
@@ -1440,13 +1469,11 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                // Стрелка влево: закрывает остальные панели и открывает только каналы
                 closeAllPanels()
                 openChannelPanelCenteredOnCurrent()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                // Стрелка вправо: закрывает остальные панели и открывает Numpad
                 closeAllPanels()
                 numPadPanel.visibility = View.VISIBLE
                 digitInputBuffer.clear()
