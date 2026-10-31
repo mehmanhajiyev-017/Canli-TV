@@ -238,7 +238,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
-        recyclerViewChannels.setItemViewCacheSize(25)
+        recyclerViewChannels.setItemViewCacheSize(15)
 
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
@@ -299,8 +299,8 @@ class MainActivity : AppCompatActivity() {
         Thread {
             try {
                 val client = OkHttpClient.Builder()
-                    .connectTimeout(4, TimeUnit.SECONDS)
-                    .readTimeout(4, TimeUnit.SECONDS)
+                    .connectTimeout(3, TimeUnit.SECONDS)
+                    .readTimeout(3, TimeUnit.SECONDS)
                     .build()
                 val req = Request.Builder().url("http://ip-api.com/json/").build()
                 val resp = client.newCall(req).execute()
@@ -321,17 +321,17 @@ class MainActivity : AppCompatActivity() {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(15000)
-                .setReadTimeoutMs(15000)
+                .setConnectTimeoutMs(10000)
+                .setReadTimeoutMs(10000)
 
+            // Легковесный стандартный буфер - видео идет без рывков и не опустошается
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    2000,
-                    15000,
-                    1000,
-                    2000
+                    2500,  // minBufferMs (2.5 сек)
+                    12000, // maxBufferMs (12 сек)
+                    1000,  // bufferForPlaybackMs (1 сек)
+                    2000   // bufferForPlaybackAfterRebufferMs (2 сек)
                 )
-                .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
@@ -346,16 +346,8 @@ class MainActivity : AppCompatActivity() {
 
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
-                        player?.seekToDefaultPosition()
-                        player?.prepare()
-                        player?.play()
-                    } else {
-                        handler.postDelayed({
-                            player?.prepare()
-                            player?.play()
-                        }, 1000)
-                    }
+                    player?.prepare()
+                    player?.play()
                 }
             })
         }
@@ -439,18 +431,20 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         initPlayer()
-        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        val savedM3u = prefs.getString("M3U_URL", "") ?: ""
-        val savedEpg = prefs.getString("EPG_URL", "") ?: ""
 
-        if (savedM3u.isNotEmpty()) {
-            fetchM3U(savedM3u, autoPlay = (player?.isPlaying != true))
+        // Загружаем плейлист ТОЛЬКО если каналы еще не загружены в память
+        if (allChannels.isEmpty()) {
+            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            val savedM3u = prefs.getString("M3U_URL", "") ?: ""
+
+            if (savedM3u.isNotEmpty()) {
+                fetchM3U(savedM3u, autoPlay = true)
+            } else {
+                showSettingsDialog()
+            }
         } else {
-            showSettingsDialog()
-        }
-
-        if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
-            handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
+            // Если каналы уже есть, просто продолжаем играть текущий
+            player?.playWhenReady = true
         }
     }
 
@@ -461,9 +455,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        player?.stop()
-        player?.release()
-        player = null
+        player?.pause()
     }
 
     override fun onDestroy() {
@@ -582,8 +574,8 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(25, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder()
@@ -652,6 +644,12 @@ class MainActivity : AppCompatActivity() {
                                 playChannelByIndex(resumeIndex)
                             } else {
                                 currentPlayingIndex = resumeIndex
+                            }
+
+                            // Запускаем EPG строго один раз только после полного старта видео
+                            val savedEpg = prefs.getString("EPG_URL", "") ?: ""
+                            if (savedEpg.isNotEmpty() && savedEpg.startsWith("http")) {
+                                handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 12000)
                             }
                         } else {
                             showSettingsDialog()
@@ -775,7 +773,7 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(180, TimeUnit.SECONDS)
             .build()
 
@@ -806,7 +804,7 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val fos = FileOutputStream(cacheFile)
                         body.byteStream().use { input ->
-                            val buffer = ByteArray(65536)
+                            val buffer = ByteArray(32768)
                             var read: Int
                             while (input.read(buffer).also { read = it } != -1) {
                                 fos.write(buffer, 0, read)
@@ -846,14 +844,14 @@ class MainActivity : AppCompatActivity() {
             }
 
             val fis = FileInputStream(file)
-            val bis = BufferedInputStream(fis, 32768)
+            val bis = BufferedInputStream(fis, 16384)
             bis.mark(2)
             val b1 = bis.read()
             val b2 = bis.read()
             bis.reset()
 
             val inStream: InputStream = if (b1 == 0x1f && b2 == 0x8b) {
-                GZIPInputStream(bis, 32768)
+                GZIPInputStream(bis, 16384)
             } else {
                 bis
             }
