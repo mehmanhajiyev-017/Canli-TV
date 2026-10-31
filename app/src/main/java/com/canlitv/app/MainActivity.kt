@@ -210,7 +210,6 @@ class MainActivity : AppCompatActivity() {
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
 
-        // Yadda saxlanmış TV / Mobil rejimini bərpa edirik
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
         isTvMode = prefs.getBoolean("IS_TV_MODE", true)
         applyAppMode(isTvMode)
@@ -220,7 +219,7 @@ class MainActivity : AppCompatActivity() {
         initNumpadButtons()
         initSettingsPanelFocus()
 
-        // Ekrana toxunduqda (mobil istifadə zamanı) kanalların açılması
+        // Mobilde video oynatıcıya dokunulduğunda menüyü açıp/kapatma
         playerView.setOnClickListener {
             if (!isTvMode) {
                 if (channelPanel.visibility == View.VISIBLE || categoryPanel.visibility == View.VISIBLE) {
@@ -292,14 +291,14 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
 
-        // TV / Mobil keçid düyməsi
+        // TV / Mobil mod değiştirici kare buton
         btnToggleMode.setOnClickListener {
             isTvMode = !isTvMode
             prefs.edit().putBoolean("IS_TV_MODE", isTvMode).apply()
             applyAppMode(isTvMode)
             Toast.makeText(
                 applicationContext,
-                if (isTvMode) "TV Rejimi Aktivləşdirildi" else "Mobil Telefon Rejimi Aktivləşdirildi",
+                if (isTvMode) "TV Modu Aktif" else "Mobil Telefon Modu Aktif",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -312,7 +311,7 @@ class MainActivity : AppCompatActivity() {
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "M3U URL daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "M3U URL giriniz", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -322,7 +321,7 @@ class MainActivity : AppCompatActivity() {
                 linkDialogPanel.visibility = View.GONE
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "M3U bağlantısı girilmedi", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -334,7 +333,7 @@ class MainActivity : AppCompatActivity() {
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "EPG URL daxil edin", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "EPG URL giriniz", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -345,7 +344,7 @@ class MainActivity : AppCompatActivity() {
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "EPG bağlantısı girilmedi", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -354,15 +353,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Rejimə uyğun vizual və ekran oriyentasiyasının təyini
+    // Seçilen moda göre ekran yönü ve menü boyutlarının ayarlanması
     private fun applyAppMode(tvMode: Boolean) {
+        val density = resources.displayMetrics.density
         if (tvMode) {
             btnToggleMode.text = "📺"
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+
+            // TV Modu: Sabit sol genişlik panelleri
+            categoryPanel.layoutParams.width = (320 * density).toInt()
+            channelPanel.layoutParams.width = (420 * density).toInt()
         } else {
             btnToggleMode.text = "📱"
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+            // Mobil Modu: Tüm ekranı kaplayan tam genişlikli menü panelleri
+            categoryPanel.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
+            channelPanel.layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT
         }
+        categoryPanel.requestLayout()
+        channelPanel.requestLayout()
     }
 
     private fun detectTimezoneByIp() {
@@ -594,8 +604,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         runOnUiThread { 
-            tvSyncChannels.text = "Kanallar: Yüklənir..."
-            tvSyncLogos.text = "Loqolar: 0"
+            tvSyncChannels.text = "Kanallar: Yükleniyor..."
+            tvSyncLogos.text = "Logolar: 0"
         }
 
         val request = try {
@@ -607,7 +617,7 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
             synchronized(loadingLock) { isM3uLoading = false }
             runOnUiThread {
-                tvSyncChannels.text = "Kanallar: Link xətası"
+                tvSyncChannels.text = "Kanallar: Bağlantı hatası"
                 if (allChannels.isEmpty()) showSettingsDialog()
             }
             return
@@ -617,7 +627,7 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call, e: IOException) {
                 synchronized(loadingLock) { isM3uLoading = false }
                 runOnUiThread {
-                    tvSyncChannels.text = "Kanallar: Yüklənmə xətası"
+                    tvSyncChannels.text = "Kanallar: Yükleme hatası"
                     if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                 }
             }
@@ -627,7 +637,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful || body.isNullOrBlank()) {
                     synchronized(loadingLock) { isM3uLoading = false }
                     runOnUiThread {
-                        tvSyncChannels.text = "Kanallar: Boş cavab"
+                        tvSyncChannels.text = "Kanallar: Boş yanıt"
                         if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                     }
                     return
@@ -654,7 +664,7 @@ class MainActivity : AppCompatActivity() {
                             if (isFinishing || isDestroyed) return@runOnUiThread
 
                             tvSyncChannels.text = "Kanallar: $channelCount"
-                            tvSyncLogos.text = "Loqolar: $logosCount"
+                            tvSyncLogos.text = "Logolar: $logosCount"
 
                             setupCategoryAdapter()
                             val catToSelect = if (categories.contains(selectedCategory)) selectedCategory else "Все"
@@ -682,7 +692,7 @@ class MainActivity : AppCompatActivity() {
                     } catch (_: Exception) {
                         synchronized(loadingLock) { isM3uLoading = false }
                         runOnUiThread {
-                            tvSyncChannels.text = "Kanallar: Emal xətası"
+                            tvSyncChannels.text = "Kanallar: İşleme hatası"
                             if (allChannels.isEmpty() && !isFinishing) showSettingsDialog()
                         }
                     }
@@ -799,7 +809,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        runOnUiThread { tvSyncPrograms.text = "Proqramlar: Yüklənir..." }
+        runOnUiThread { tvSyncPrograms.text = "Programlar: Yükleniyor..." }
 
         val request = try {
             Request.Builder()
@@ -808,14 +818,14 @@ class MainActivity : AppCompatActivity() {
                 .build()
         } catch (_: Exception) {
             synchronized(loadingLock) { isEpgLoading = false }
-            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Link xətası" }
+            runOnUiThread { tvSyncPrograms.text = "Programlar: Bağlantı hatası" }
             return
         }
 
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 synchronized(loadingLock) { isEpgLoading = false }
-                runOnUiThread { tvSyncPrograms.text = "Proqramlar: Şəbəkə xətası" }
+                runOnUiThread { tvSyncPrograms.text = "Programlar: Ağ hatası" }
             }
 
             override fun onResponse(call: Call, response: Response) {
@@ -850,7 +860,7 @@ class MainActivity : AppCompatActivity() {
                     }.start()
                 } else {
                     synchronized(loadingLock) { isEpgLoading = false }
-                    runOnUiThread { tvSyncPrograms.text = "Proqramlar: Fayl xətası" }
+                    runOnUiThread { tvSyncPrograms.text = "Programlar: Dosya hatası" }
                 }
             }
         })
@@ -858,8 +868,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun parseEpgFromFile(file: File) {
         try {
-            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Emal edilir..." }
+            runOnUiThread { tvSyncPrograms.text = "Programlar: İşleniyor..." }
 
+            // TVirl Akış Optimizasyonu: Yalnızca mevcut kanalların ID ve normalize isim dizini
             val channelKeyMap = HashMap<String, String>(allChannels.size * 2)
             for (ch in allChannels) {
                 val norm = normalizeName(ch.name)
@@ -925,6 +936,7 @@ class MainActivity : AppCompatActivity() {
                             progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
                             val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
 
+                            // TVirl Filtresi: Kanal listede varsa ve programı henüz bulunmadıysa doğrulanır
                             if (ourKey != null && !livePrograms.containsKey(ourKey)) {
                                 val startStr = parser.getAttributeValue(null, "start") ?: ""
                                 val stopStr = parser.getAttributeValue(null, "stop") ?: ""
@@ -996,15 +1008,15 @@ class MainActivity : AppCompatActivity() {
             currentProgramsMap.putAll(livePrograms)
 
             runOnUiThread {
-                tvSyncPrograms.text = "Proqramlar: ${currentProgramsMap.size}"
-                tvSyncLogos.text = "Loqolar: ${allChannels.count { it.logoUrl.isNotEmpty() }}"
+                tvSyncPrograms.text = "Programlar: ${currentProgramsMap.size}"
+                tvSyncLogos.text = "Logolar: ${allChannels.count { it.logoUrl.isNotEmpty() }}"
                 recyclerViewChannels.adapter?.notifyDataSetChanged()
                 if (infoBanner.visibility == View.VISIBLE && currentPlayingIndex in allChannels.indices) {
                     showInfoBanner(allChannels[currentPlayingIndex])
                 }
             }
         } catch (_: Exception) {
-            runOnUiThread { tvSyncPrograms.text = "Proqramlar: Xəta" }
+            runOnUiThread { tvSyncPrograms.text = "Programlar: Hata" }
         } finally {
             synchronized(loadingLock) { isEpgLoading = false }
         }
@@ -1443,7 +1455,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (backPressCount >= 2) {
-                    Toast.makeText(this, "Çıxış üçün daha ${5 - backPressCount} dəfə basın", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Çıkış için ${5 - backPressCount} kez daha basınız", Toast.LENGTH_SHORT).show()
                 }
 
                 return true
@@ -1519,7 +1531,7 @@ class MainActivity : AppCompatActivity() {
                 playChannelByIndex(foundIndex)
                 numPadPanel.visibility = View.GONE
             } else {
-                Toast.makeText(applicationContext, "Kanal tapılmadı", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Kanal bulunamadı", Toast.LENGTH_SHORT).show()
                 tvNumpadDisplay.text = "---"
             }
         }
