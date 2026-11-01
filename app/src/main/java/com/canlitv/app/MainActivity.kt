@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBannerName: TextView
     private lateinit var tvBannerCategory: TextView
 
-    private lateinit var syncStatusCard: View
+    private lateinit var syncStatusCard: LinearLayout
     private lateinit var tvSyncChannels: TextView
     private lateinit var tvSyncLogos: TextView
     private lateinit var tvSyncPrograms: TextView
@@ -208,13 +208,34 @@ class MainActivity : AppCompatActivity() {
         tvSyncChannels = findViewById(R.id.tvSyncChannels)
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
-        tvSyncSpeed = findViewById(R.id.tvSyncSpeed)
 
+        // Динамическое добавление строки скорости в панель без необходимости изменения XML
+        val existingSpeedView = syncStatusCard.findViewWithTag<TextView>("tag_tvSyncSpeed")
+        if (existingSpeedView != null) {
+            tvSyncSpeed = existingSpeedView
+        } else {
+            tvSyncSpeed = TextView(this).apply {
+                tag = "tag_tvSyncSpeed"
+                text = "Скорость: 0 Мбит/с"
+                setTextColor(Color.parseColor("#2979FF"))
+                textSize = 11f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 4 }
+                layoutParams = params
+            }
+            syncStatusCard.addView(tvSyncSpeed)
+        }
+
+        // Компактный полупрозрачный фон панели
         syncStatusCard.background = GradientDrawable().apply {
             setColor(Color.parseColor("#800B0E14"))
             cornerRadius = 10f
             setStroke(1, Color.parseColor("#33FFFFFF"))
         }
+        syncStatusCard.setPadding(24, 16, 24, 16)
         syncStatusCard.visibility = View.GONE
 
         numPadPanel.background = GradientDrawable().apply {
