@@ -14,18 +14,21 @@
         android:clickable="false"
         app:use_controller="false" />
 
-    <!-- Карточка статуса синхронизации (3x OK) -->
+    <!-- Компактная полупрозрачная панель статуса и скорости (3x OK) -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
-        android:layout_marginTop="24dp"
-        android:layout_marginEnd="24dp"
+        android:layout_marginTop="18dp"
+        android:layout_marginEnd="18dp"
         android:orientation="vertical"
-        android:padding="16dp"
-        android:elevation="10dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:elevation="12dp"
         android:visibility="gone">
 
         <TextView
@@ -34,26 +37,36 @@
             android:layout_height="wrap_content"
             android:text="Каналы: 0"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="13sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvSyncLogos"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:text="Логотипы: 0"
             android:textColor="#B0BEC5"
-            android:textSize="14sp" />
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/tvSyncPrograms"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:text="Программы: 0"
             android:textColor="#B0BEC5"
-            android:textSize="14sp" />
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tvSyncSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Скорость: 0.00 Мбит/с"
+            android:textColor="#00E676"
+            android:textSize="12sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- Левая панель: Категории -->
@@ -62,16 +75,17 @@
         android:layout_width="320dp"
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
-        android:background="#F20A0E17"
+        android:background="#F20B0F19"
         android:orientation="vertical"
         android:padding="16dp"
-        android:elevation="8dp"
+        android:elevation="10dp"
         android:visibility="gone">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="14dp"
+            android:paddingStart="6dp"
             android:text="Категории"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
@@ -81,7 +95,8 @@
             android:id="@+id/recyclerViewCategories"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:clipToPadding="false" />
 
         <LinearLayout
             android:id="@+id/btnOpenSettings"
@@ -113,35 +128,37 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Левая панель: Каналы -->
+    <!-- Левая панель: Список каналов -->
     <LinearLayout
         android:id="@+id/channelPanel"
-        android:layout_width="380dp"
+        android:layout_width="400dp"
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
-        android:background="#F70A0E17"
+        android:background="#F50B0F19"
         android:orientation="vertical"
         android:padding="12dp"
-        android:elevation="8dp"
+        android:elevation="10dp"
         android:visibility="gone">
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerViewChannels"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:clipToPadding="false" />
     </LinearLayout>
 
-    <!-- Нижняя панель: Инфо-баннер -->
+    <!-- Нижняя панель: Инфо-баннер канала -->
     <LinearLayout
         android:id="@+id/infoBanner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:layout_margin="24dp"
-        android:background="#E60A0E17"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="24dp"
         android:orientation="vertical"
-        android:padding="16dp"
-        android:elevation="6dp"
+        android:padding="18dp"
+        android:elevation="8dp"
         android:visibility="gone">
 
         <LinearLayout
@@ -162,8 +179,8 @@
 
             <ImageView
                 android:id="@+id/imgBannerLogo"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_marginEnd="16dp"
                 android:scaleType="fitCenter"
                 android:visibility="gone" />
@@ -173,6 +190,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Имя канала"
                 android:textColor="#FFFFFF"
                 android:textSize="22sp"
@@ -183,23 +202,25 @@
             android:id="@+id/tvBannerCategory"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:text="Категория"
             android:textColor="#B0BEC5"
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- Правая панель: Numpad -->
+    <!-- Правая панель: Цифровой набор (Numpad) -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="260dp"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
         android:layout_centerVertical="true"
-        android:layout_marginEnd="24dp"
+        android:layout_marginEnd="28dp"
         android:orientation="vertical"
         android:padding="16dp"
-        android:elevation="8dp"
+        android:elevation="10dp"
         android:visibility="gone">
 
         <TextView
@@ -237,7 +258,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Окно настроек с кнопками обновления -->
+    <!-- Модальное окно Настроек (Ровное, выровненное по сетке) -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -246,15 +267,16 @@
         android:clickable="true"
         android:focusable="true"
         android:gravity="center"
-        android:elevation="15dp"
+        android:elevation="20dp"
         android:visibility="gone">
 
         <LinearLayout
-            android:layout_width="650dp"
+            android:id="@+id/settingsContainerBox"
+            android:layout_width="660dp"
             android:layout_height="wrap_content"
-            android:background="#151A22"
+            android:background="#151A24"
             android:orientation="vertical"
-            android:padding="26dp">
+            android:padding="28dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -265,11 +287,10 @@
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
-            <!-- M3U Секция -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Ссылка на плейлист M3U:"
+                android:text="Ссылка на плейлист M3U / M3U8:"
                 android:textColor="#B0BEC5"
                 android:textSize="14sp" />
 
@@ -277,7 +298,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="18dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
@@ -294,7 +315,7 @@
 
                 <Button
                     android:id="@+id/btnSaveM3u"
-                    android:layout_width="110dp"
+                    android:layout_width="115dp"
                     android:layout_height="50dp"
                     android:layout_marginStart="10dp"
                     android:text="СОХРАНИТЬ"
@@ -305,16 +326,15 @@
                     android:id="@+id/btnRefreshM3u"
                     android:layout_width="52dp"
                     android:layout_height="50dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginStart="8dp"
                     android:text="↻"
                     android:textSize="18sp" />
             </LinearLayout>
 
-            <!-- EPG Секция -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Ссылка на EPG телегид (.xml / .gz):"
+                android:text="Ссылка на телегид EPG (.xml / .gz):"
                 android:textColor="#B0BEC5"
                 android:textSize="14sp" />
 
@@ -339,7 +359,7 @@
 
                 <Button
                     android:id="@+id/btnSaveEpg"
-                    android:layout_width="110dp"
+                    android:layout_width="115dp"
                     android:layout_height="50dp"
                     android:layout_marginStart="10dp"
                     android:text="СОХРАНИТЬ"
@@ -350,12 +370,11 @@
                     android:id="@+id/btnRefreshEpg"
                     android:layout_width="52dp"
                     android:layout_height="50dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginStart="8dp"
                     android:text="↻"
                     android:textSize="18sp" />
             </LinearLayout>
 
-            <!-- Кнопка Закрыть -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -364,11 +383,11 @@
 
                 <Button
                     android:id="@+id/btnCloseSettings"
-                    android:layout_width="130dp"
+                    android:layout_width="140dp"
                     android:layout_height="50dp"
                     android:text="ЗАКРЫТЬ"
                     android:textColor="#ECEFF1"
-                    android:textSize="15sp"
+                    android:textSize="14sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
