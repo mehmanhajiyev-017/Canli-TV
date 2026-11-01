@@ -47,7 +47,6 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -267,7 +266,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
-        recyclerViewChannels.setItemViewCacheSize(15)
+        recyclerViewChannels.setItemViewCacheSize(20)
 
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
         recyclerViewCategories.setHasFixedSize(true)
@@ -555,7 +554,6 @@ class MainActivity : AppCompatActivity() {
         btnSaveM3u.requestFocus()
     }
 
-    // TVirl-стиль: потоковый разбор плейлиста M3U
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         synchronized(loadingLock) {
             if (isM3uLoading) return
@@ -642,7 +640,7 @@ class MainActivity : AppCompatActivity() {
 
                                 val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                                 if (savedEpg.startsWith("http")) {
-                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 3000)
                                 }
                             } else {
                                 showSettingsDialog()
@@ -696,7 +694,7 @@ class MainActivity : AppCompatActivity() {
                 }
             } else if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
                 val name = if (currentName.isNotEmpty()) currentName else "Channel $counter"
-                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Other"
+                val cat = if (currentGroup.isNotEmpty()) currentGroup else "Другие"
                 tempCategories.add(cat)
                 tempChannels.add(
                     Channel(
@@ -751,7 +749,6 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    // TVirl-стиль: фоновая загрузка сжатого телегида с локальным дисковым кэшированием
     private fun downloadAndParseEpg(epgUrl: String) {
         synchronized(loadingLock) {
             if (isEpgLoading) return
@@ -764,7 +761,7 @@ class MainActivity : AppCompatActivity() {
         ) {
             Thread {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
-                parseEpgFromFile(cacheFile)
+                parseEpgLinear(cacheFile)
             }.start()
             return
         }
@@ -775,6 +772,7 @@ class MainActivity : AppCompatActivity() {
             Request.Builder()
                 .url(epgUrl)
                 .header("User-Agent", "Mozilla/5.0")
+                .header("Accept-Encoding", "gzip")
                 .build()
         } catch (_: Exception) {
             synchronized(loadingLock) { isEpgLoading = false }
@@ -789,69 +787,66 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                var success = false
-                try {
-                    response.use { resp ->
-                        val body = resp.body
-                        if (resp.isSuccessful && body != null) {
-                            val tempFile = File(cacheDir, "epg_cache.tmp")
-                            body.byteStream().use { input ->
-                                FileOutputStream(tempFile).use { output ->
-                                    val buffer = ByteArray(32768)
-                                    var readBytes: Int
-                                    while (input.read(buffer).also { readBytes = it } != -1) {
-                                        output.write(buffer, 0, readBytes)
-                                    }
+                val body = response.body
+                if (!response.isSuccessful || body == null) {
+                    synchronized(loadingLock) { isEpgLoading = false }
+                    runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка ответа" }
+                    return
+                }
+
+                Thread {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+                    try {
+                        val tempFile = File(cacheDir, "epg_cache.tmp")
+                        body.byteStream().use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                var readBytes: Int
+                                while (input.read(buffer).also { readBytes = it } != -1) {
+                                    output.write(buffer, 0, readBytes)
                                 }
                             }
-                            if (tempFile.length() > 0L) {
-                                if (cacheFile.exists()) cacheFile.delete()
-                                tempFile.renameTo(cacheFile)
-                                success = true
-                            }
                         }
+                        if (tempFile.length() > 0) {
+                            if (cacheFile.exists()) cacheFile.delete()
+                            tempFile.renameTo(cacheFile)
+                            parseEpgLinear(cacheFile)
+                        } else {
+                            throw IOException("Пустой EPG")
+                        }
+                    } catch (_: Exception) {
+                        synchronized(loadingLock) { isEpgLoading = false }
+                        runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка файла" }
                     }
-                } catch (_: Exception) {}
-
-                if (success) {
-                    Thread {
-                        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
-                        parseEpgFromFile(cacheFile)
-                    }.start()
-                } else {
-                    synchronized(loadingLock) { isEpgLoading = false }
-                    runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка файла" }
-                }
+                }.start()
             }
         })
     }
 
-    // TVirl-стиль: разбор XMLTV потоком через GZIPInputStream и сопоставление только текущего эфира
-    private fun parseEpgFromFile(file: File) {
+    // Линейный безанкорный парсер без сбоев стека
+    private fun parseEpgLinear(file: File) {
         try {
             runOnUiThread { tvSyncPrograms.text = "Программы: Обработка..." }
 
-            val channelKeyMap = HashMap<String, String>(allChannels.size * 2)
+            val matchedChannelMap = HashMap<String, String>(allChannels.size * 3)
             for (ch in allChannels) {
                 val norm = normalizeName(ch.name)
-                if (norm.isNotEmpty()) {
-                    channelKeyMap[norm] = norm
-                }
+                if (norm.isNotEmpty()) matchedChannelMap[norm] = norm
                 if (ch.tvgId.isNotEmpty()) {
-                    channelKeyMap[ch.tvgId.lowercase(Locale.ROOT)] = norm
+                    matchedChannelMap[ch.tvgId.lowercase(Locale.ROOT)] = norm
                 }
-                channelKeyMap[ch.name.lowercase(Locale.ROOT)] = norm
+                matchedChannelMap[ch.name.lowercase(Locale.ROOT)] = norm
             }
 
             val fis = FileInputStream(file)
-            val bis = BufferedInputStream(fis, 16384)
-            bis.mark(2)
+            val bis = BufferedInputStream(fis, 64 * 1024)
+            bis.mark(4)
             val b1 = bis.read()
             val b2 = bis.read()
             bis.reset()
 
             val inStream: InputStream = if (b1 == 0x1f && b2 == 0x8b) {
-                GZIPInputStream(bis, 16384)
+                GZIPInputStream(bis, 64 * 1024)
             } else {
                 bis
             }
@@ -861,59 +856,56 @@ class MainActivity : AppCompatActivity() {
             parser.setInput(inStream, "UTF-8")
 
             val now = System.currentTimeMillis()
-            val xmlIdToOurKey = HashMap<String, String>()
-            val livePrograms = HashMap<String, String>()
-            val tempEpgLogos = HashMap<String, String>()
+            val xmlIdToOurKey = HashMap<String, String>(1000)
+            val livePrograms = HashMap<String, String>(allChannels.size)
+            val tempEpgLogos = HashMap<String, String>(allChannels.size)
 
-            var currentTag = ""
             var currentChannelId = ""
-            var progChannel = ""
-            var progTitle = ""
-            var inChannel = false
-            var inProgramme = false
-            var isCurrentProgram = false
+            var inTargetChannelTag = false
+            var isCurrentTargetProgramme = false
+            var currentTargetKey = ""
+            var currentTag = ""
 
             var eventType = parser.eventType
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
                         currentTag = parser.name
+
                         if (currentTag.equals("channel", ignoreCase = true)) {
-                            inChannel = true
                             currentChannelId = parser.getAttributeValue(null, "id")?.trim()?.lowercase(Locale.ROOT) ?: ""
-                            if (currentChannelId.isNotEmpty() && channelKeyMap.containsKey(currentChannelId)) {
-                                xmlIdToOurKey[currentChannelId] = channelKeyMap[currentChannelId] ?: currentChannelId
+                            inTargetChannelTag = currentChannelId.isNotEmpty()
+                            val key = matchedChannelMap[currentChannelId]
+                            if (key != null) {
+                                xmlIdToOurKey[currentChannelId] = key
                             }
-                        } else if (inChannel && currentTag.equals("icon", ignoreCase = true)) {
+                        } else if (inTargetChannelTag && currentTag.equals("icon", ignoreCase = true)) {
                             val iconSrc = parser.getAttributeValue(null, "src")?.trim() ?: ""
-                            if (iconSrc.isNotEmpty() && currentChannelId.isNotEmpty()) {
-                                tempEpgLogos[currentChannelId] = iconSrc
+                            if (iconSrc.isNotEmpty()) {
                                 xmlIdToOurKey[currentChannelId]?.let { ourKey ->
                                     tempEpgLogos[ourKey] = iconSrc
+                                    tempEpgLogos[currentChannelId] = iconSrc
                                 }
                             }
                         } else if (currentTag.equals("programme", ignoreCase = true)) {
-                            progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
-                            val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
+                            val progChannel = parser.getAttributeValue(null, "channel")?.trim()?.lowercase(Locale.ROOT) ?: ""
+                            val ourKey = xmlIdToOurKey[progChannel] ?: matchedChannelMap[progChannel]
 
-                            // Берем только передачу текущего эфира и только если программа для канала еще не найдена
                             if (ourKey != null && !livePrograms.containsKey(ourKey)) {
-                                val startStr = parser.getAttributeValue(null, "start") ?: ""
-                                val stopStr = parser.getAttributeValue(null, "stop") ?: ""
-                                val startMs = parseXmlTvTime(startStr)
-                                val stopMs = parseXmlTvTime(stopStr)
+                                val startStr = parser.getAttributeValue(null, "start")
+                                val stopStr = parser.getAttributeValue(null, "stop")
+                                val startMs = parseXmlTvTimeFast(startStr)
+                                val stopMs = parseXmlTvTimeFast(stopStr)
 
-                                if (startMs > 0 && stopMs > 0 && now in (startMs - 5 * 60 * 1000L)..(stopMs + 5 * 60 * 1000L)) {
-                                    inProgramme = true
-                                    isCurrentProgram = true
-                                    progTitle = ""
+                                // Если время валидно и текущий эфир попадает в диапазон (с запасом 2 часа на часовые пояса)
+                                if (startMs > 0 && stopMs > 0 && now in (startMs - 2 * 3600 * 1000L)..(stopMs + 2 * 3600 * 1000L)) {
+                                    isCurrentTargetProgramme = true
+                                    currentTargetKey = ourKey
                                 } else {
-                                    inProgramme = false
-                                    isCurrentProgram = false
+                                    isCurrentTargetProgramme = false
                                 }
                             } else {
-                                inProgramme = false
-                                isCurrentProgram = false
+                                isCurrentTargetProgramme = false
                             }
                         }
                     }
@@ -921,14 +913,15 @@ class MainActivity : AppCompatActivity() {
                     XmlPullParser.TEXT -> {
                         val text = parser.text?.trim() ?: ""
                         if (text.isNotEmpty()) {
-                            if (inChannel && currentTag.equals("display-name", ignoreCase = true) && currentChannelId.isNotEmpty()) {
+                            if (inTargetChannelTag && currentTag.equals("display-name", ignoreCase = true)) {
                                 val norm = normalizeName(text)
-                                if (channelKeyMap.containsKey(norm)) {
-                                    xmlIdToOurKey[currentChannelId] = norm
-                                    tempEpgLogos[currentChannelId]?.let { tempEpgLogos[norm] = it }
+                                if (matchedChannelMap.containsKey(norm)) {
+                                    val ourKey = matchedChannelMap[norm] ?: norm
+                                    xmlIdToOurKey[currentChannelId] = ourKey
                                 }
-                            } else if (inProgramme && isCurrentProgram && currentTag.equals("title", ignoreCase = true) && progTitle.isEmpty()) {
-                                progTitle = text
+                            } else if (isCurrentTargetProgramme && currentTag.equals("title", ignoreCase = true)) {
+                                livePrograms[currentTargetKey] = text
+                                isCurrentTargetProgramme = false
                             }
                         }
                     }
@@ -936,20 +929,11 @@ class MainActivity : AppCompatActivity() {
                     XmlPullParser.END_TAG -> {
                         val endTag = parser.name
                         if (endTag.equals("channel", ignoreCase = true)) {
-                            inChannel = false
+                            inTargetChannelTag = false
                             currentChannelId = ""
                         } else if (endTag.equals("programme", ignoreCase = true)) {
-                            if (inProgramme && isCurrentProgram && progTitle.isNotEmpty()) {
-                                val ourKey = xmlIdToOurKey[progChannel] ?: channelKeyMap[progChannel]
-                                if (ourKey != null) {
-                                    livePrograms[ourKey] = progTitle
-                                    livePrograms[progChannel] = progTitle
-                                }
-                            }
-                            inProgramme = false
-                            isCurrentProgram = false
-                            progChannel = ""
-                            progTitle = ""
+                            isCurrentTargetProgramme = false
+                            currentTargetKey = ""
                         }
                         currentTag = ""
                     }
@@ -976,26 +960,39 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (_: Exception) {
-            runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка" }
+            runOnUiThread { tvSyncPrograms.text = "Программы: Ошибка разбора" }
         } finally {
             synchronized(loadingLock) { isEpgLoading = false }
         }
     }
 
-    private fun parseXmlTvTime(timeStr: String): Long {
-        if (timeStr.length < 14) return 0L
-        val clean = timeStr.trim()
-        return try {
-            if (clean.length >= 19 && (clean.contains("+") || clean.contains("-"))) {
-                val format = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
-                format.parse(clean)?.time ?: 0L
+    private fun parseXmlTvTimeFast(timeStr: String?): Long {
+        if (timeStr == null || timeStr.length < 14) return 0L
+        try {
+            val year = timeStr.substring(0, 4).toInt()
+            val month = timeStr.substring(4, 6).toInt() - 1
+            val day = timeStr.substring(6, 8).toInt()
+            val hour = timeStr.substring(8, 10).toInt()
+            val min = timeStr.substring(10, 12).toInt()
+            val sec = timeStr.substring(12, 14).toInt()
+
+            val cal = java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+            cal.set(year, month, day, hour, min, sec)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            var timeMs = cal.timeInMillis
+
+            if (timeStr.length >= 19) {
+                val sign = if (timeStr[15] == '-') -1 else 1
+                val tzHours = timeStr.substring(16, 18).toIntOrNull() ?: 0
+                val tzMins = timeStr.substring(18, 20).toIntOrNull() ?: 0
+                val offsetMs = (tzHours * 3600000L + tzMins * 60000L) * sign
+                timeMs -= offsetMs
             } else {
-                val format = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-                format.timeZone = detectedTimeZone
-                format.parse(clean.substring(0, 14))?.time ?: 0L
+                timeMs -= detectedTimeZone.getOffset(timeMs)
             }
+            return timeMs
         } catch (_: Exception) {
-            0L
+            return 0L
         }
     }
 
@@ -1336,7 +1333,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // 1. Окно настроек
         if (linkDialogPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
                 linkDialogPanel.visibility = View.GONE
@@ -1345,7 +1341,6 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // 2. Numpad
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -1362,7 +1357,6 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // 3. Панель категорий
         if (categoryPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -1386,7 +1380,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 4. Панель каналов
         if (channelPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -1411,7 +1404,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 5. Управление плеером
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
                 backPressCount++
