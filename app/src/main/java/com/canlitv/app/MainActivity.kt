@@ -145,7 +145,6 @@ class MainActivity : AppCompatActivity() {
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
     private lateinit var bandwidthMeter: DefaultBandwidthMeter
 
-    // Защита от вечного зависания потока: если буферизация длится дольше 10 сек — перезапуск
     private val bufferingWatchdog = Runnable {
         if (player?.playbackState == Player.STATE_BUFFERING && !isFinishing) {
             player?.seekToDefaultPosition()
@@ -212,12 +211,12 @@ class MainActivity : AppCompatActivity() {
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
 
-        // Безопасная инициализация поля скорости (работает с любым XML)
-        val speedFromId = findViewById<TextView?>(R.id.tvSyncSpeed)
-        if (speedFromId != null) {
-            tvSyncSpeed = speedFromId
+        val existingSpeedView = syncStatusCard.findViewWithTag<TextView>("tag_tvSyncSpeed")
+        if (existingSpeedView != null) {
+            tvSyncSpeed = existingSpeedView
         } else {
             tvSyncSpeed = TextView(this).apply {
+                tag = "tag_tvSyncSpeed"
                 text = "Скорость: 0.00 Мбит/с"
                 setTextColor(Color.parseColor("#00E676"))
                 textSize = 12f
@@ -226,7 +225,6 @@ class MainActivity : AppCompatActivity() {
             syncStatusCard.addView(tvSyncSpeed)
         }
 
-        // Оформление всех панелей современным Glassmorphism-стилем
         syncStatusCard.background = GradientDrawable().apply {
             setColor(Color.parseColor("#880A0E17"))
             cornerRadius = 12f
@@ -303,7 +301,6 @@ class MainActivity : AppCompatActivity() {
         recyclerViewChannels.setItemViewCacheSize(20)
         recyclerViewChannels.itemAnimator = null
 
-        // Умная пауза загрузки логотипов во время быстрой прокрутки списка (защита от лагов)
         recyclerViewChannels.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                 if (!isFinishing && !isDestroyed) {
@@ -372,7 +369,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Гарантирует, что ни одна боковая или нижняя панель не наложится на другую
     private fun closeAllPanels() {
         categoryPanel.visibility = View.GONE
         channelPanel.visibility = View.GONE
@@ -413,13 +409,12 @@ class MainActivity : AppCompatActivity() {
                 .setConnectTimeoutMs(15000)
                 .setReadTimeoutMs(15000)
 
-            // Оптимальный буфер из вашей стабильной рабочей версии
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    15000, // Мин. буфер 15 сек
-                    50000, // Макс. буфер 50 сек
-                    2500,  // Старт воспроизведения 2.5 сек
-                    5000   // Ребуфер 5 сек
+                    15000,
+                    50000,
+                    2500,
+                    5000
                 )
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
@@ -435,10 +430,12 @@ class MainActivity : AppCompatActivity() {
                 .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
                 .build()
 
+            // Отключаем бесконечный повтор каналов / плейлиста
+            player?.repeatMode = Player.REPEAT_MODE_OFF
+
             playerView.player = player
             playerView.useController = false
 
-            // Живой мониторинг скорости вещания
             bandwidthMeter.addEventListener(handler) { _, _, bitrate ->
                 if (syncStatusCard.visibility == View.VISIBLE) {
                     val speedMbps = bitrate / 1_000_000.0
@@ -466,7 +463,7 @@ class MainActivity : AppCompatActivity() {
                                 player?.prepare()
                                 player?.playWhenReady = true
                             }
-                        }, 1500)
+                        }, 2000)
                     }
                 }
 
@@ -655,14 +652,13 @@ class MainActivity : AppCompatActivity() {
         btnSaveM3u.post { btnSaveM3u.requestFocus() }
     }
 
-    // Потоковое чтение плейлиста M3U без перегрузки оперативной памяти
     private fun fetchM3U(url: String, autoPlay: Boolean) {
         synchronized(loadingLock) {
             if (isM3uLoading) return
             isM3uLoading = true
         }
 
-        runOnUiThread {
+        runOnUiThread { 
             tvSyncChannels.text = "Каналы: Загрузка..."
             tvSyncLogos.text = "Логотипы: 0"
         }
@@ -742,10 +738,9 @@ class MainActivity : AppCompatActivity() {
                                     currentPlayingIndex = resumeIndex
                                 }
 
-                                // Запуск EPG отложен на 8 секунд, чтобы видеопоток стартовал мгновенно
                                 val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                                 if (savedEpg.startsWith("http")) {
-                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 8000)
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 12000)
                                 }
                             } else {
                                 showSettingsDialog()
@@ -763,7 +758,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Быстрый построчный парсер M3U без регулярных выражений (как в TVirl)
     private fun parseM3UStream(inputStream: InputStream) {
         val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8), 32768)
         var currentName = ""
@@ -959,7 +953,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Скоростной потоковый парсер EPG с живым счетчиком
     private fun parseEpgLiveStream(file: File) {
         try {
             runOnUiThread { tvSyncPrograms.text = "Программы: 0" }
@@ -1464,7 +1457,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showInfoBanner(channel: Channel) {
-        // Если открыто любое боковое меню, баннер не перекрывает его
         if (categoryPanel.visibility == View.VISIBLE ||
             channelPanel.visibility == View.VISIBLE ||
             numPadPanel.visibility == View.VISIBLE ||
@@ -1524,7 +1516,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        // 1. Если открыто окно настроек
         if (linkDialogPanel.visibility == View.VISIBLE) {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
                 linkDialogPanel.visibility = View.GONE
@@ -1533,7 +1524,6 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // 2. Если открыта правая цифровая панель (Numpad)
         if (numPadPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -1548,7 +1538,6 @@ class MainActivity : AppCompatActivity() {
             return super.onKeyDown(keyCode, event)
         }
 
-        // 3. Если открыта левая панель категорий
         if (categoryPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK -> {
@@ -1572,7 +1561,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 4. Если открыта левая панель каналов
         if (channelPanel.visibility == View.VISIBLE) {
             when (keyCode) {
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -1597,7 +1585,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 5. Основной режим просмотра ТВ (когда все боковые панели закрыты)
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
                 if (infoBanner.visibility == View.VISIBLE) {
