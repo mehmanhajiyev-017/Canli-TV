@@ -140,16 +140,7 @@ class MainActivity : AppCompatActivity() {
         .build()
 
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
-
     private lateinit var bandwidthMeter: DefaultBandwidthMeter
-
-    private val bufferingWatchdog = Runnable {
-        if (player?.playbackState == Player.STATE_BUFFERING && !isFinishing) {
-            player?.seekToDefaultPosition()
-            player?.prepare()
-            player?.play()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -209,7 +200,6 @@ class MainActivity : AppCompatActivity() {
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
 
-        // Динамическое добавление строки скорости в панель без необходимости изменения XML
         val existingSpeedView = syncStatusCard.findViewWithTag<TextView>("tag_tvSyncSpeed")
         if (existingSpeedView != null) {
             tvSyncSpeed = existingSpeedView
@@ -229,7 +219,6 @@ class MainActivity : AppCompatActivity() {
             syncStatusCard.addView(tvSyncSpeed)
         }
 
-        // Компактный полупрозрачный фон панели
         syncStatusCard.background = GradientDrawable().apply {
             setColor(Color.parseColor("#800B0E14"))
             cornerRadius = 10f
@@ -393,22 +382,21 @@ class MainActivity : AppCompatActivity() {
                 .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
                 .setTransferListener(bandwidthMeter)
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(8000)
-                .setReadTimeoutMs(8000)
+                .setConnectTimeoutMs(15000)
+                .setReadTimeoutMs(15000)
 
             val loadControl = DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    5000,
-                    25000,
-                    1500,
-                    2500
+                    15000,
+                    50000,
+                    2500,
+                    5000
                 )
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
             val renderersFactory = DefaultRenderersFactory(this)
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-                .setEnableDecoderFallback(true)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 
             player = ExoPlayer.Builder(this, renderersFactory)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
@@ -441,16 +429,7 @@ class MainActivity : AppCompatActivity() {
                             player?.prepare()
                             player?.playWhenReady = true
                         }
-                    }, 1500)
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_BUFFERING) {
-                        handler.removeCallbacks(bufferingWatchdog)
-                        handler.postDelayed(bufferingWatchdog, 8000)
-                    } else {
-                        handler.removeCallbacks(bufferingWatchdog)
-                    }
+                    }, 2000)
                 }
             })
         }
@@ -542,18 +521,15 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         player?.playWhenReady = false
-        handler.removeCallbacks(bufferingWatchdog)
     }
 
     override fun onStop() {
         super.onStop()
         player?.pause()
-        handler.removeCallbacks(bufferingWatchdog)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(bufferingWatchdog)
         player?.release()
         player = null
         handler.removeCallbacksAndMessages(null)
@@ -713,7 +689,7 @@ class MainActivity : AppCompatActivity() {
 
                                 val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                                 if (savedEpg.startsWith("http")) {
-                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 12000)
                                 }
                             } else {
                                 showSettingsDialog()
@@ -1403,7 +1379,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun exitApplicationCompletely() {
-        handler.removeCallbacks(bufferingWatchdog)
         player?.stop()
         player?.release()
         player = null
