@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.google.android.exoplayer2.DefaultLoadControl
+import com.google.android.exoplayer2.DefaultRenderersFactory
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.PlaybackException
@@ -132,11 +133,20 @@ class MainActivity : AppCompatActivity() {
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
-        .connectTimeout(25, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
+
+    // Сторожевой таймер против зависания воспроизведения
+    private val bufferingWatchdog = Runnable {
+        if (player?.playbackState == Player.STATE_BUFFERING && !isFinishing) {
+            player?.seekToDefaultPosition()
+            player?.prepare()
+            player?.play()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -355,14 +365,24 @@ class MainActivity : AppCompatActivity() {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(10000)
-                .setReadTimeoutMs(10000)
+                .setConnectTimeoutMs(8000)
+                .setReadTimeoutMs(8000)
 
             val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(3000, 15000, 1000, 2000)
+                .setBufferDurationsMs(
+                    5000,
+                    25000,
+                    1500,
+                    2500
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
-            player = ExoPlayer.Builder(this)
+            val renderersFactory = DefaultRenderersFactory(this)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                .setEnableDecoderFallback(true)
+
+            player = ExoPlayer.Builder(this, renderersFactory)
                 .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
                 .setLoadControl(loadControl)
                 .build()
@@ -372,17 +392,23 @@ class MainActivity : AppCompatActivity() {
 
             player?.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
-                        player?.seekToDefaultPosition()
-                        player?.prepare()
-                        player?.play()
+                    player?.stop()
+                    handler.postDelayed({
+                        if (!isFinishing && currentPlayingIndex in allChannels.indices) {
+                            val currentChannel = allChannels[currentPlayingIndex]
+                            player?.setMediaItem(MediaItem.fromUri(Uri.parse(currentChannel.streamUrl)))
+                            player?.prepare()
+                            player?.playWhenReady = true
+                        }
+                    }, 1500)
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_BUFFERING) {
+                        handler.removeCallbacks(bufferingWatchdog)
+                        handler.postDelayed(bufferingWatchdog, 8000)
                     } else {
-                        handler.postDelayed({
-                            if (!isFinishing && player != null) {
-                                player?.prepare()
-                                player?.play()
-                            }
-                        }, 1200)
+                        handler.removeCallbacks(bufferingWatchdog)
                     }
                 }
             })
@@ -405,6 +431,9 @@ class MainActivity : AppCompatActivity() {
             .apply()
 
         initPlayer()
+
+        player?.stop()
+        player?.clearMediaItems()
         player?.setMediaItem(MediaItem.fromUri(Uri.parse(channel.streamUrl)))
         player?.prepare()
         player?.playWhenReady = true
@@ -472,15 +501,18 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         player?.playWhenReady = false
+        handler.removeCallbacks(bufferingWatchdog)
     }
 
     override fun onStop() {
         super.onStop()
         player?.pause()
+        handler.removeCallbacks(bufferingWatchdog)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        handler.removeCallbacks(bufferingWatchdog)
         player?.release()
         player = null
         handler.removeCallbacksAndMessages(null)
@@ -638,10 +670,9 @@ class MainActivity : AppCompatActivity() {
                                     currentPlayingIndex = resumeIndex
                                 }
 
-                                // Отложенный на 8 секунд запуск EPG, чтобы видеопоток гарантированно стабилизировался
                                 val savedEpg = prefs.getString("EPG_URL", "") ?: ""
                                 if (savedEpg.startsWith("http")) {
-                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 8000)
+                                    handler.postDelayed({ downloadAndParseEpg(savedEpg) }, 10000)
                                 }
                             } else {
                                 showSettingsDialog()
@@ -824,7 +855,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Живой скоростной парсер с динамическим счетчиком TVirl
     private fun parseEpgLiveStream(file: File) {
         try {
             runOnUiThread { tvSyncPrograms.text = "Программы: 0" }
@@ -897,7 +927,6 @@ class MainActivity : AppCompatActivity() {
                                 val startMs = parseXmlTvTimeFast(startStr)
                                 val stopMs = parseXmlTvTimeFast(stopStr)
 
-                                // Расширенный диапазон поиска (текущий эфир с запасом 4 часа)
                                 if (startMs > 0 && stopMs > 0 && now in (startMs - 4 * 3600 * 1000L)..(stopMs + 4 * 3600 * 1000L)) {
                                     currentTargetKey = ourKey
                                 } else {
@@ -922,7 +951,6 @@ class MainActivity : AppCompatActivity() {
                                 livePrograms[currentTargetKey!!] = text
                                 currentTargetKey = null
 
-                                // Живое обновление счетчика в реальном времени каждые 20 совпадений
                                 val currentCount = livePrograms.size
                                 if (currentCount - lastReportedCount >= 20) {
                                     lastReportedCount = currentCount
@@ -1206,8 +1234,9 @@ class MainActivity : AppCompatActivity() {
                     imgLogo.visibility = View.VISIBLE
                     Glide.with(this@MainActivity)
                         .load(finalLogoUrl)
-                        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-                        .override(90, 90)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .override(64, 64)
+                        .timeout(3000)
                         .into(imgLogo)
                 } else {
                     val safeLogoView: View = imgLogo
@@ -1313,8 +1342,9 @@ class MainActivity : AppCompatActivity() {
                 bannerView.visibility = View.VISIBLE
                 Glide.with(this)
                     .load(finalLogoUrl)
-                    .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .override(120, 120)
+                    .timeout(3000)
                     .into(bannerView)
             } else {
                 val safeView: View = bannerView
@@ -1332,6 +1362,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun exitApplicationCompletely() {
+        handler.removeCallbacks(bufferingWatchdog)
         player?.stop()
         player?.release()
         player = null
