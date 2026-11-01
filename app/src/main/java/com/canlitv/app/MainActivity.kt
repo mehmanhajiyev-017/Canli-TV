@@ -211,12 +211,11 @@ class MainActivity : AppCompatActivity() {
         tvSyncLogos = findViewById(R.id.tvSyncLogos)
         tvSyncPrograms = findViewById(R.id.tvSyncPrograms)
 
-        val existingSpeedView = syncStatusCard.findViewWithTag<TextView>("tag_tvSyncSpeed")
-        if (existingSpeedView != null) {
-            tvSyncSpeed = existingSpeedView
+        val speedFromId = findViewById<TextView?>(R.id.tvSyncSpeed)
+        if (speedFromId != null) {
+            tvSyncSpeed = speedFromId
         } else {
             tvSyncSpeed = TextView(this).apply {
-                tag = "tag_tvSyncSpeed"
                 text = "Скорость: 0.00 Мбит/с"
                 setTextColor(Color.parseColor("#00E676"))
                 textSize = 12f
@@ -430,7 +429,7 @@ class MainActivity : AppCompatActivity() {
                 .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
                 .build()
 
-            // Отключаем бесконечный повтор каналов / плейлиста
+            // Отключаем бесконечный повтор плейлиста
             player?.repeatMode = Player.REPEAT_MODE_OFF
 
             playerView.player = player
