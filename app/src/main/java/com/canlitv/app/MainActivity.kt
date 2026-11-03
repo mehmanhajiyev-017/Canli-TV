@@ -135,13 +135,22 @@ class MainActivity : AppCompatActivity() {
     private var isEpgLoading = false
     private val loadingLock = Any()
 
-    // Увеличенные сетевые таймауты для надежного скачивания больших EPG файлов
+    // Сетевой клиент с обходом SSL и расширенными таймаутами
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .hostnameVerifier { _, _ -> true }
+        .sslSocketFactory(
+            javax.net.ssl.HttpsURLConnection.getDefaultSSLSocketFactory(),
+            object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            }
+        )
         .build()
 
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
@@ -337,7 +346,7 @@ class MainActivity : AppCompatActivity() {
                 closeAllPanels()
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, "Ссылка M3U не введена", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Ссылка M3U nie введена", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -900,7 +909,7 @@ class MainActivity : AppCompatActivity() {
         val request = try {
             Request.Builder()
                 .url(epgUrl)
-                .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
+                .header("User-Agent", "Mozilla/5.0")
                 .header("Accept-Encoding", "gzip, deflate")
                 .build()
         } catch (_: Exception) {
