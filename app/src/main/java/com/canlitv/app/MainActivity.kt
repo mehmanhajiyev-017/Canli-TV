@@ -135,7 +135,7 @@ class MainActivity : AppCompatActivity() {
     private var isEpgLoading = false
     private val loadingLock = Any()
 
-    // Сетевой клиент с обходом SSL и расширенными таймаутами
+    // Сетевой клиент с обходом SSL и расширенными таймаутами для устранения сетевых ошибок EPG
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
@@ -346,7 +346,7 @@ class MainActivity : AppCompatActivity() {
                 closeAllPanels()
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, "Ссылка M3U nie введена", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Ссылка M3U не введена", Toast.LENGTH_SHORT).show()
             }
         }
 
