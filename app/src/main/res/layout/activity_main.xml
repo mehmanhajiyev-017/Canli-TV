@@ -258,7 +258,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Модальное окно Настроек (Ровное, выровненное по сетке) -->
+    <!-- Модальное окно Настроек -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -274,7 +274,6 @@
             android:id="@+id/settingsContainerBox"
             android:layout_width="660dp"
             android:layout_height="wrap_content"
-            android:background="#151A24"
             android:orientation="vertical"
             android:padding="28dp">
 
