@@ -135,11 +135,13 @@ class MainActivity : AppCompatActivity() {
     private var isEpgLoading = false
     private val loadingLock = Any()
 
+    // Увеличенные сетевые таймауты для надежного скачивания больших EPG файлов
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private var detectedTimeZone: TimeZone = TimeZone.getDefault()
@@ -429,7 +431,6 @@ class MainActivity : AppCompatActivity() {
                 .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT)
                 .build()
 
-            // Отключаем бесконечный повтор плейлиста
             player?.repeatMode = Player.REPEAT_MODE_OFF
 
             playerView.player = player
@@ -899,8 +900,8 @@ class MainActivity : AppCompatActivity() {
         val request = try {
             Request.Builder()
                 .url(epgUrl)
-                .header("User-Agent", "Mozilla/5.0")
-                .header("Accept-Encoding", "gzip")
+                .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
+                .header("Accept-Encoding", "gzip, deflate")
                 .build()
         } catch (_: Exception) {
             synchronized(loadingLock) { isEpgLoading = false }
