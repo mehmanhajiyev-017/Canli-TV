@@ -135,7 +135,6 @@ class MainActivity : AppCompatActivity() {
     private var isEpgLoading = false
     private val loadingLock = Any()
 
-    // Сетевой клиент с обходом SSL и расширенными таймаутами для устранения сетевых ошибок EPG
     private val httpClient = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
