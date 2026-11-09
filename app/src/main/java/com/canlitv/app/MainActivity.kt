@@ -78,6 +78,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
 
+    private lateinit var btnTabM3u: Button
+    private lateinit var btnTabXtream: Button
+    private lateinit var layoutXtreamForm: LinearLayout
+    private lateinit var layoutM3uForm: LinearLayout
+
     private lateinit var etXtreamServer: EditText
     private lateinit var etXtreamUser: EditText
     private lateinit var etXtreamPass: EditText
@@ -86,9 +91,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
-    private lateinit var btnRefreshM3u: Button
-    private lateinit var btnSaveEpg: Button
-    private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
 
@@ -204,6 +206,11 @@ class MainActivity : AppCompatActivity() {
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
 
+        btnTabM3u = findViewById(R.id.btnTabM3u)
+        btnTabXtream = findViewById(R.id.btnTabXtream)
+        layoutXtreamForm = findViewById(R.id.layoutXtreamForm)
+        layoutM3uForm = findViewById(R.id.layoutM3uForm)
+
         etXtreamServer = findViewById(R.id.etXtreamServer)
         etXtreamUser = findViewById(R.id.etXtreamUser)
         etXtreamPass = findViewById(R.id.etXtreamPass)
@@ -212,9 +219,6 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveM3u = findViewById(R.id.btnSaveM3u)
-        btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
-        btnSaveEpg = findViewById(R.id.btnSaveEpg)
-        btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
 
@@ -273,6 +277,19 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
+
+        // Tab keçidləri (M3U vs Xtream)
+        btnTabXtream.setOnClickListener {
+            layoutXtreamForm.visibility = View.VISIBLE
+            layoutM3uForm.visibility = View.GONE
+            updateTabStyles(isXtream = true)
+        }
+
+        btnTabM3u.setOnClickListener {
+            layoutXtreamForm.visibility = View.GONE
+            layoutM3uForm.visibility = View.VISIBLE
+            updateTabStyles(isXtream = false)
+        }
 
         btnOpenSettings.background = defaultBtnBg
         btnOpenSettings.setOnClickListener {
@@ -343,7 +360,7 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
 
             if (server.isEmpty() && user.isEmpty() && pass.isEmpty()) {
-                prefs.edit().remove("XTREAM_SERVER").remove("XTREAM_USER").remove("XTREAM_PASS").apply()
+                prefs.edit().remove("XTREAM_SERVER").remove("XTREAM_USER").remove("XTREAM_PASS").remove("ACTIVE_MODE").apply()
                 Toast.makeText(applicationContext, "Xtream məlumatları təmizləndi", Toast.LENGTH_SHORT).show()
             } else if (server.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
                 if (!server.startsWith("http://") && !server.startsWith("https://")) {
@@ -358,10 +375,8 @@ class MainActivity : AppCompatActivity() {
                     .putString("XTREAM_PASS", pass)
                     .putString("M3U_URL", m3uUrl)
                     .putString("EPG_URL", epgUrl)
+                    .putString("ACTIVE_MODE", "XTREAM")
                     .apply()
-
-                etM3uUrl.setText(m3uUrl)
-                etEpgUrl.setText(epgUrl)
 
                 closeAllPanels()
                 currentPlayingIndex = -1
@@ -375,61 +390,47 @@ class MainActivity : AppCompatActivity() {
 
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
+            val epgUrl = etEpgUrl.text.toString().trim()
             val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-            if (url.isEmpty()) {
-                prefs.edit().remove("M3U_URL").apply()
-                Toast.makeText(applicationContext, "M3U linki təmizləndi", Toast.LENGTH_SHORT).show()
+
+            if (url.isEmpty() && epgUrl.isEmpty()) {
+                prefs.edit().remove("M3U_URL").remove("EPG_URL").remove("ACTIVE_MODE").apply()
+                Toast.makeText(applicationContext, "M3U və EPG təmizləndi", Toast.LENGTH_SHORT).show()
             } else if (url.startsWith("http")) {
-                prefs.edit().putString("M3U_URL", url).apply()
+                prefs.edit()
+                    .putString("M3U_URL", url)
+                    .putString("EPG_URL", epgUrl)
+                    .putString("ACTIVE_MODE", "M3U")
+                    .apply()
+
                 closeAllPanels()
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
+                if (epgUrl.startsWith("http")) {
+                    deleteLocalEpgCache()
+                    downloadAndParseEpg(epgUrl)
+                }
             } else {
                 Toast.makeText(applicationContext, "Düzgün M3U URL daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
-        btnRefreshM3u.setOnClickListener {
-            val url = etM3uUrl.text.toString().trim()
-            if (url.isNotEmpty() && url.startsWith("http")) {
-                closeAllPanels()
-                fetchM3U(url, autoPlay = false)
-            } else {
-                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnSaveEpg.setOnClickListener {
-            val epgUrl = etEpgUrl.text.toString().trim()
-            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-            if (epgUrl.isEmpty()) {
-                prefs.edit().remove("EPG_URL").apply()
-                deleteLocalEpgCache()
-                currentProgramsMap.clear()
-                Toast.makeText(applicationContext, "EPG linki təmizləndi", Toast.LENGTH_SHORT).show()
-            } else if (epgUrl.startsWith("http")) {
-                prefs.edit().putString("EPG_URL", epgUrl).apply()
-                closeAllPanels()
-                deleteLocalEpgCache()
-                downloadAndParseEpg(epgUrl)
-            } else {
-                Toast.makeText(applicationContext, "Düzgün EPG URL daxil edin", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnRefreshEpg.setOnClickListener {
-            val epgUrl = etEpgUrl.text.toString().trim()
-            if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
-                closeAllPanels()
-                deleteLocalEpgCache()
-                downloadAndParseEpg(epgUrl)
-            } else {
-                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
-            }
-        }
-
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
+        }
+    }
+
+    private fun updateTabStyles(isXtream: Boolean) {
+        if (isXtream) {
+            btnTabXtream.background = focusedBtnBg
+            btnTabXtream.setTextColor(Color.WHITE)
+            btnTabM3u.background = defaultBtnBg
+            btnTabM3u.setTextColor(Color.parseColor("#ECEFF1"))
+        } else {
+            btnTabM3u.background = focusedBtnBg
+            btnTabM3u.setTextColor(Color.WHITE)
+            btnTabXtream.background = defaultBtnBg
+            btnTabXtream.setTextColor(Color.parseColor("#ECEFF1"))
         }
     }
 
@@ -586,7 +587,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveXtream, btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnTabM3u, btnTabXtream, btnSaveXtream, btnSaveM3u, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -617,7 +618,6 @@ class MainActivity : AppCompatActivity() {
                 player?.playWhenReady = true
             }
         } else {
-            // İLK DƏFƏ SİSTEMƏ DAXİL OLARKƏN AVTOMATİK AYARLAR PƏNCƏRƏSİNİ AÇIR
             showSettingsDialog()
         }
     }
@@ -705,13 +705,26 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         closeAllPanels()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        val activeMode = prefs.getString("ACTIVE_MODE", "XTREAM")
+
         etXtreamServer.setText(prefs.getString("XTREAM_SERVER", ""))
         etXtreamUser.setText(prefs.getString("XTREAM_USER", ""))
         etXtreamPass.setText(prefs.getString("XTREAM_PASS", ""))
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
+
+        if (activeMode == "M3U") {
+            layoutXtreamForm.visibility = View.GONE
+            layoutM3uForm.visibility = View.VISIBLE
+            updateTabStyles(isXtream = false)
+        } else {
+            layoutXtreamForm.visibility = View.VISIBLE
+            layoutM3uForm.visibility = View.GONE
+            updateTabStyles(isXtream = true)
+        }
+
         linkDialogPanel.visibility = View.VISIBLE
-        etXtreamServer.post { etXtreamServer.requestFocus() }
+        btnTabXtream.requestFocus()
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
