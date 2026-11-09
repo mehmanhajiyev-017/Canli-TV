@@ -258,7 +258,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Модальное окно Настроек (M3U, Xtream и EPG) -->
+    <!-- Модальное окно Настроек (M3U / Xtream Seçimi) -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -281,135 +281,174 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
-                android:text="Настройки приложения"
+                android:text="Настройки подключения"
                 android:textColor="#FFFFFF"
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
-            <!-- Xtream API Section -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Xtream API (Server, User, Pass):"
-                android:textColor="#B0BEC5"
-                android:textSize="13sp" />
-
+            <!-- Seçim Düymələri (M3U Playlist / Xtream Code) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="20dp"
                 android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnTabM3u"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="M3U PLAYLIST"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnTabXtream"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="XTREME CODE"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Xtream Form Konteyneri -->
+            <LinearLayout
+                android:id="@+id/layoutXtreamForm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="visible">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Xtream Server URL:"
+                    android:textColor="#B0BEC5"
+                    android:textSize="13sp" />
 
                 <EditText
                     android:id="@+id/etXtreamServer"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="44dp"
-                    android:layout_weight="1.5"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="10dp"
                     android:hint="http://line.net:80"
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
                     android:singleLine="true"
                     android:textSize="13sp" />
 
-                <EditText
-                    android:id="@+id/etXtreamUser"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="6dp"
-                    android:hint="User"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:singleLine="true"
-                    android:textSize="13sp" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
 
-                <EditText
-                    android:id="@+id/etXtreamPass"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="6dp"
-                    android:hint="Pass"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:singleLine="true"
-                    android:textSize="13sp" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Имя пользователя:"
+                            android:textColor="#B0BEC5"
+                            android:textSize="13sp" />
+
+                        <EditText
+                            android:id="@+id/etXtreamUser"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="4dp"
+                            android:hint="User"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:singleLine="true"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Пароль:"
+                            android:textColor="#B0BEC5"
+                            android:textSize="13sp" />
+
+                        <EditText
+                            android:id="@+id/etXtreamPass"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="4dp"
+                            android:hint="Pass"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:singleLine="true"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+                </LinearLayout>
 
                 <Button
                     android:id="@+id/btnSaveXtream"
-                    android:layout_width="100dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="8dp"
-                    android:text="XTREAM"
-                    android:textSize="11sp"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="16dp"
+                    android:text="ПОДКЛЮЧИТЬ XTREAM"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Ссылка на плейлист M3U / M3U8:"
-                android:textColor="#B0BEC5"
-                android:textSize="13sp" />
-
+            <!-- M3U Form Konteyneri -->
             <LinearLayout
+                android:id="@+id/layoutM3uForm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="12dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ссылка на плейлист M3U / M3U8:"
+                    android:textColor="#B0BEC5"
+                    android:textSize="13sp" />
 
                 <EditText
                     android:id="@+id/etM3uUrl"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="44dp"
-                    android:layout_weight="1"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="12dp"
                     android:hint="http://.../playlist.m3u"
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
                     android:singleLine="true"
                     android:textSize="13sp" />
 
-                <Button
-                    android:id="@+id/btnSaveM3u"
-                    android:layout_width="100dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="8dp"
-                    android:text="M3U"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-
-                <Button
-                    android:id="@+id/btnRefreshM3u"
-                    android:layout_width="48dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="6dp"
-                    android:text="↻"
-                    android:textSize="16sp" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Ссылка на телегид EPG (.xml / .gz):"
-                android:textColor="#B0BEC5"
-                android:textSize="13sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="18dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ссылка на телегид EPG (.xml / .gz):"
+                    android:textColor="#B0BEC5"
+                    android:textSize="13sp" />
 
                 <EditText
                     android:id="@+id/etEpgUrl"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="44dp"
-                    android:layout_weight="1"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="16dp"
                     android:hint="https://epg.one/epg.xml.gz"
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
@@ -417,33 +456,26 @@
                     android:textSize="13sp" />
 
                 <Button
-                    android:id="@+id/btnSaveEpg"
-                    android:layout_width="100dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="8dp"
-                    android:text="EPG"
-                    android:textSize="11sp"
+                    android:id="@+id/btnSaveM3u"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="ПОДКЛЮЧИТЬ M3U"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
-
-                <Button
-                    android:id="@+id/btnRefreshEpg"
-                    android:layout_width="48dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="6dp"
-                    android:text="↻"
-                    android:textSize="16sp" />
             </LinearLayout>
 
+            <!-- Bağlama düyməsi -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
                 android:gravity="end"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/btnCloseSettings"
-                    android:layout_width="130dp"
-                    android:layout_height="46dp"
+                    android:layout_width="140dp"
+                    android:layout_height="44dp"
                     android:text="ЗАКРЫТЬ"
                     android:textColor="#ECEFF1"
                     android:textSize="13sp"
