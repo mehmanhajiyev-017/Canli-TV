@@ -78,19 +78,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
 
-    private lateinit var btnTabM3u: Button
-    private lateinit var btnTabXtream: Button
-    private lateinit var layoutXtreamForm: LinearLayout
-    private lateinit var layoutM3uForm: LinearLayout
-
-    private lateinit var etXtreamServer: EditText
-    private lateinit var etXtreamUser: EditText
-    private lateinit var etXtreamPass: EditText
-    private lateinit var btnSaveXtream: Button
-
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
+    private lateinit var btnRefreshM3u: Button
+    private lateinit var btnSaveEpg: Button
+    private lateinit var btnRefreshEpg: Button
     private lateinit var btnCloseSettings: Button
     private lateinit var btnOpenSettings: View
 
@@ -180,22 +173,22 @@ class MainActivity : AppCompatActivity() {
 
         rowDefaultBg = GradientDrawable().apply {
             setColor(Color.parseColor("#33151A22"))
-            cornerRadius = 12f
+            cornerRadius = 14f
         }
         rowFocusedBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#4D2979FF"))
-            cornerRadius = 12f
+            setColor(Color.parseColor("#502979FF"))
+            cornerRadius = 14f
             setStroke(2, Color.parseColor("#B3FFFFFF"))
         }
 
         defaultBtnBg = GradientDrawable().apply {
             setColor(Color.parseColor("#551C222E"))
-            cornerRadius = 12f
+            cornerRadius = 14f
             setStroke(2, Color.parseColor("#40FFFFFF"))
         }
         focusedBtnBg = GradientDrawable().apply {
             setColor(Color.parseColor("#2979FF"))
-            cornerRadius = 12f
+            cornerRadius = 14f
             setStroke(2, Color.parseColor("#FFFFFF"))
         }
 
@@ -206,19 +199,12 @@ class MainActivity : AppCompatActivity() {
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
 
-        btnTabM3u = findViewById(R.id.btnTabM3u)
-        btnTabXtream = findViewById(R.id.btnTabXtream)
-        layoutXtreamForm = findViewById(R.id.layoutXtreamForm)
-        layoutM3uForm = findViewById(R.id.layoutM3uForm)
-
-        etXtreamServer = findViewById(R.id.etXtreamServer)
-        etXtreamUser = findViewById(R.id.etXtreamUser)
-        etXtreamPass = findViewById(R.id.etXtreamPass)
-        btnSaveXtream = findViewById(R.id.btnSaveXtream)
-
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
         btnSaveM3u = findViewById(R.id.btnSaveM3u)
+        btnRefreshM3u = findViewById(R.id.btnRefreshM3u)
+        btnSaveEpg = findViewById(R.id.btnSaveEpg)
+        btnRefreshEpg = findViewById(R.id.btnRefreshEpg)
         btnCloseSettings = findViewById(R.id.btnCloseSettings)
         btnOpenSettings = findViewById(R.id.btnOpenSettings)
 
@@ -250,14 +236,14 @@ class MainActivity : AppCompatActivity() {
 
         syncStatusCard.background = GradientDrawable().apply {
             setColor(Color.parseColor("#880A0E17"))
-            cornerRadius = 12f
+            cornerRadius = 14f
             setStroke(1, Color.parseColor("#40FFFFFF"))
         }
         syncStatusCard.visibility = View.GONE
 
         infoBanner.background = GradientDrawable().apply {
             setColor(Color.parseColor("#E60B0F19"))
-            cornerRadius = 16f
+            cornerRadius = 18f
             setStroke(2, Color.parseColor("#33FFFFFF"))
         }
 
@@ -277,18 +263,6 @@ class MainActivity : AppCompatActivity() {
         loadFavorites()
         initNumpadButtons()
         initSettingsPanelFocus()
-
-        btnTabXtream.setOnClickListener {
-            layoutXtreamForm.visibility = View.VISIBLE
-            layoutM3uForm.visibility = View.GONE
-            updateTabStyles(isXtream = true)
-        }
-
-        btnTabM3u.setOnClickListener {
-            layoutXtreamForm.visibility = View.GONE
-            layoutM3uForm.visibility = View.VISIBLE
-            updateTabStyles(isXtream = false)
-        }
 
         btnOpenSettings.background = defaultBtnBg
         btnOpenSettings.setOnClickListener {
@@ -352,84 +326,63 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.setHasFixedSize(true)
         recyclerViewCategories.itemAnimator = null
 
-        btnSaveXtream.setOnClickListener {
-            var server = etXtreamServer.text.toString().trim().removeSuffix("/")
-            val user = etXtreamUser.text.toString().trim()
-            val pass = etXtreamPass.text.toString().trim()
-            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-
-            if (server.isEmpty() && user.isEmpty() && pass.isEmpty()) {
-                prefs.edit().remove("XTREAM_SERVER").remove("XTREAM_USER").remove("XTREAM_PASS").remove("ACTIVE_MODE").apply()
-                Toast.makeText(applicationContext, "Xtream məlumatları təmizləndi", Toast.LENGTH_SHORT).show()
-            } else if (server.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
-                if (!server.startsWith("http://") && !server.startsWith("https://")) {
-                    server = "http://$server"
-                }
-                val m3uUrl = "$server/get.php?username=$user&password=$pass&type=m3u_plus"
-                val epgUrl = "$server/xmltv.php?username=$user&password=$pass"
-
-                prefs.edit()
-                    .putString("XTREAM_SERVER", server)
-                    .putString("XTREAM_USER", user)
-                    .putString("XTREAM_PASS", pass)
-                    .putString("M3U_URL", m3uUrl)
-                    .putString("EPG_URL", epgUrl)
-                    .putString("ACTIVE_MODE", "XTREAM")
-                    .apply()
-
-                closeAllPanels()
-                currentPlayingIndex = -1
-                fetchM3U(m3uUrl, autoPlay = true)
-                deleteLocalEpgCache()
-                downloadAndParseEpg(epgUrl)
-            } else {
-                Toast.makeText(applicationContext, "Zəhmət olmasa bütün Xtream xanalarını doldurun", Toast.LENGTH_SHORT).show()
-            }
-        }
-
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
-            val epgUrl = etEpgUrl.text.toString().trim()
             val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-
-            if (url.isEmpty() && epgUrl.isEmpty()) {
-                prefs.edit().remove("M3U_URL").remove("EPG_URL").remove("ACTIVE_MODE").apply()
-                Toast.makeText(applicationContext, "M3U və EPG təmizləndi", Toast.LENGTH_SHORT).show()
+            if (url.isEmpty()) {
+                prefs.edit().remove("M3U_URL").apply()
+                Toast.makeText(applicationContext, "M3U linki təmizləndi", Toast.LENGTH_SHORT).show()
             } else if (url.startsWith("http")) {
-                prefs.edit()
-                    .putString("M3U_URL", url)
-                    .putString("EPG_URL", epgUrl)
-                    .putString("ACTIVE_MODE", "M3U")
-                    .apply()
-
+                prefs.edit().putString("M3U_URL", url).apply()
                 closeAllPanels()
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
-                if (epgUrl.startsWith("http")) {
-                    deleteLocalEpgCache()
-                    downloadAndParseEpg(epgUrl)
-                }
             } else {
                 Toast.makeText(applicationContext, "Düzgün M3U URL daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
+        btnRefreshM3u.setOnClickListener {
+            val url = etM3uUrl.text.toString().trim()
+            if (url.isNotEmpty() && url.startsWith("http")) {
+                closeAllPanels()
+                fetchM3U(url, autoPlay = false)
+            } else {
+                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnSaveEpg.setOnClickListener {
+            val epgUrl = etEpgUrl.text.toString().trim()
+            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            if (epgUrl.isEmpty()) {
+                prefs.edit().remove("EPG_URL").apply()
+                deleteLocalEpgCache()
+                currentProgramsMap.clear()
+                Toast.makeText(applicationContext, "EPG linki təmizləndi", Toast.LENGTH_SHORT).show()
+            } else if (epgUrl.startsWith("http")) {
+                prefs.edit().putString("EPG_URL", epgUrl).apply()
+                closeAllPanels()
+                deleteLocalEpgCache()
+                downloadAndParseEpg(epgUrl)
+            } else {
+                Toast.makeText(applicationContext, "Düzgün EPG URL daxil edin", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnRefreshEpg.setOnClickListener {
+            val epgUrl = etEpgUrl.text.toString().trim()
+            if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
+                closeAllPanels()
+                deleteLocalEpgCache()
+                downloadAndParseEpg(epgUrl)
+            } else {
+                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         btnCloseSettings.setOnClickListener {
             linkDialogPanel.visibility = View.GONE
-        }
-    }
-
-    private fun updateTabStyles(isXtream: Boolean) {
-        if (isXtream) {
-            btnTabXtream.background = focusedBtnBg
-            btnTabXtream.setTextColor(Color.WHITE)
-            btnTabM3u.background = defaultBtnBg
-            btnTabM3u.setTextColor(Color.parseColor("#ECEFF1"))
-        } else {
-            btnTabM3u.background = focusedBtnBg
-            btnTabM3u.setTextColor(Color.WHITE)
-            btnTabXtream.background = defaultBtnBg
-            btnTabXtream.setTextColor(Color.parseColor("#ECEFF1"))
         }
     }
 
@@ -565,7 +518,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initSettingsPanelFocus() {
-        val inputs = listOf(etXtreamServer, etXtreamUser, etXtreamPass, etM3uUrl, etEpgUrl)
+        val inputs = listOf(etM3uUrl, etEpgUrl)
         for (input in inputs) {
             input.backgroundTintList = null
             val defaultEditBg = GradientDrawable().apply {
@@ -586,7 +539,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnTabM3u, btnTabXtream, btnSaveXtream, btnSaveM3u, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -704,26 +657,10 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         closeAllPanels()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        val activeMode = prefs.getString("ACTIVE_MODE", "XTREAM")
-
-        etXtreamServer.setText(prefs.getString("XTREAM_SERVER", ""))
-        etXtreamUser.setText(prefs.getString("XTREAM_USER", ""))
-        etXtreamPass.setText(prefs.getString("XTREAM_PASS", ""))
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
-
-        if (activeMode == "M3U") {
-            layoutXtreamForm.visibility = View.GONE
-            layoutM3uForm.visibility = View.VISIBLE
-            updateTabStyles(isXtream = false)
-        } else {
-            layoutXtreamForm.visibility = View.VISIBLE
-            layoutM3uForm.visibility = View.GONE
-            updateTabStyles(isXtream = true)
-        }
-
         linkDialogPanel.visibility = View.VISIBLE
-        btnTabXtream.requestFocus()
+        etM3uUrl.post { etM3uUrl.requestFocus() }
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
@@ -1290,7 +1227,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.post {
             val layoutManager = recyclerViewChannels.layoutManager as? LinearLayoutManager ?: return@post
-            val itemHeightPx = (68 * resources.displayMetrics.density).toInt()
+            val itemHeightPx = (72 * resources.displayMetrics.density).toInt()
             val centerOffset = (recyclerViewChannels.height / 2) - (itemHeightPx / 2)
             layoutManager.scrollToPositionWithOffset(targetPos, centerOffset)
 
@@ -1310,9 +1247,9 @@ class MainActivity : AppCompatActivity() {
                         RecyclerView.LayoutParams.MATCH_PARENT,
                         RecyclerView.LayoutParams.WRAP_CONTENT
                     ).apply {
-                        setMargins(0, 4, 0, 6)
+                        setMargins(0, 6, 0, 8)
                     }
-                    setPadding(18, 14, 18, 14)
+                    setPadding(20, 16, 20, 16)
                     gravity = android.view.Gravity.CENTER_VERTICAL
                     isFocusable = true
                     isClickable = true
@@ -1320,20 +1257,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 val iconView = TextView(this@MainActivity).apply {
                     id = View.generateViewId()
-                    textSize = 18f
+                    textSize = 20f
                 }
                 val titleView = TextView(this@MainActivity).apply {
                     id = View.generateViewId()
-                    textSize = 15f
+                    textSize = 16f
                     typeface = android.graphics.Typeface.DEFAULT_BOLD
                     layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        marginStart = 14
+                        marginStart = 16
                     }
                 }
                 val arrowView = TextView(this@MainActivity).apply {
                     id = View.generateViewId()
                     text = "›"
-                    textSize = 18f
+                    textSize = 20f
                     typeface = android.graphics.Typeface.DEFAULT_BOLD
                 }
                 row.addView(iconView)
@@ -1441,7 +1378,7 @@ class MainActivity : AppCompatActivity() {
                     Glide.with(this@MainActivity)
                         .load(finalLogoUrl)
                         .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .override(60, 60)
+                        .override(64, 64)
                         .dontAnimate()
                         .timeout(2500)
                         .into(imgLogo)
@@ -1562,7 +1499,7 @@ class MainActivity : AppCompatActivity() {
                 Glide.with(this)
                     .load(finalLogoUrl)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .override(100, 100)
+                    .override(110, 110)
                     .dontAnimate()
                     .timeout(2500)
                     .into(bannerView)
