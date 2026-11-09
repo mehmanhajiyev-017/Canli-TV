@@ -78,6 +78,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var infoBanner: View
     private lateinit var linkDialogPanel: View
 
+    private lateinit var etXtreamServer: EditText
+    private lateinit var etXtreamUser: EditText
+    private lateinit var etXtreamPass: EditText
+    private lateinit var btnSaveXtream: Button
+
     private lateinit var etM3uUrl: EditText
     private lateinit var etEpgUrl: EditText
     private lateinit var btnSaveM3u: Button
@@ -198,6 +203,11 @@ class MainActivity : AppCompatActivity() {
         numPadPanel = findViewById(R.id.numPadPanel)
         infoBanner = findViewById(R.id.infoBanner)
         linkDialogPanel = findViewById(R.id.linkDialogPanel)
+
+        etXtreamServer = findViewById(R.id.etXtreamServer)
+        etXtreamUser = findViewById(R.id.etXtreamUser)
+        etXtreamPass = findViewById(R.id.etXtreamPass)
+        btnSaveXtream = findViewById(R.id.btnSaveXtream)
 
         etM3uUrl = findViewById(R.id.etM3uUrl)
         etEpgUrl = findViewById(R.id.etEpgUrl)
@@ -326,6 +336,34 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.setHasFixedSize(true)
         recyclerViewCategories.itemAnimator = null
 
+        btnSaveXtream.setOnClickListener {
+            val server = etXtreamServer.text.toString().trim().removeSuffix("/")
+            val user = etXtreamUser.text.toString().trim()
+            val pass = etXtreamPass.text.toString().trim()
+
+            if (server.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
+                val m3uUrl = "$server/get.php?username=$user&password=$pass&type=m3u_plus"
+                val epgUrl = "$server/xmltv.php?username=$user&password=$pass"
+
+                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("XTREAM_SERVER", server)
+                    .putString("XTREAM_USER", user)
+                    .putString("XTREAM_PASS", pass)
+                    .putString("M3U_URL", m3uUrl)
+                    .putString("EPG_URL", epgUrl)
+                    .apply()
+
+                closeAllPanels()
+                currentPlayingIndex = -1
+                fetchM3U(m3uUrl, autoPlay = true)
+                deleteLocalEpgCache()
+                downloadAndParseEpg(epgUrl)
+            } else {
+                Toast.makeText(applicationContext, "Заполните все поля Xtream API", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
             if (url.isNotEmpty() && url.startsWith("http")) {
@@ -419,12 +457,7 @@ class MainActivity : AppCompatActivity() {
                 .setReadTimeoutMs(15000)
 
             val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    15000,
-                    50000,
-                    2500,
-                    5000
-                )
+                .setBufferDurationsMs(15000, 50000, 2500, 5000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
 
@@ -515,7 +548,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initSettingsPanelFocus() {
-        val inputs = listOf(etM3uUrl, etEpgUrl)
+        val inputs = listOf(etXtreamServer, etXtreamUser, etXtreamPass, etM3uUrl, etEpgUrl)
         for (input in inputs) {
             input.backgroundTintList = null
             val defaultEditBg = GradientDrawable().apply {
@@ -536,7 +569,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val dialogButtons = listOf(btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
+        val dialogButtons = listOf(btnSaveXtream, btnSaveM3u, btnRefreshM3u, btnSaveEpg, btnRefreshEpg, btnCloseSettings)
         for (btn in dialogButtons) {
             btn.backgroundTintList = null
             btn.background = defaultBtnBg
@@ -557,8 +590,12 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         initPlayer()
 
+        val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        etXtreamServer.setText(prefs.getString("XTREAM_SERVER", ""))
+        etXtreamUser.setText(prefs.getString("XTREAM_USER", ""))
+        etXtreamPass.setText(prefs.getString("XTREAM_PASS", ""))
+
         if (allChannels.isEmpty()) {
-            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
             val savedM3u = prefs.getString("M3U_URL", "") ?: ""
 
             if (savedM3u.isNotEmpty()) {
@@ -657,7 +694,7 @@ class MainActivity : AppCompatActivity() {
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         linkDialogPanel.visibility = View.VISIBLE
-        btnSaveM3u.post { btnSaveM3u.requestFocus() }
+        etXtreamServer.post { etXtreamServer.requestFocus() }
     }
 
     private fun fetchM3U(url: String, autoPlay: Boolean) {
