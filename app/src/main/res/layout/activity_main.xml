@@ -258,7 +258,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Модальное окно Настроек -->
+    <!-- Модальное окно Настроек (M3U, Xtream и EPG) -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -272,62 +272,122 @@
 
         <LinearLayout
             android:id="@+id/settingsContainerBox"
-            android:layout_width="660dp"
+            android:layout_width="680dp"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="28dp">
+            android:padding="26dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
+                android:layout_marginBottom="16dp"
                 android:text="Настройки приложения"
                 android:textColor="#FFFFFF"
                 android:textSize="22sp"
                 android:textStyle="bold" />
+
+            <!-- Xtream API Section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Xtream API (Server, User, Pass):"
+                android:textColor="#B0BEC5"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="12dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etXtreamServer"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1.5"
+                    android:hint="http://line.net:80"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:singleLine="true"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/etXtreamUser"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="User"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:singleLine="true"
+                    android:textSize="13sp" />
+
+                <EditText
+                    android:id="@+id/etXtreamPass"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="Pass"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:singleLine="true"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnSaveXtream"
+                    android:layout_width="100dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:text="XTREAM"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Ссылка на плейлист M3U / M3U8:"
                 android:textColor="#B0BEC5"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="18dp"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="12dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <EditText
                     android:id="@+id/etM3uUrl"
                     android:layout_width="0dp"
-                    android:layout_height="50dp"
+                    android:layout_height="44dp"
                     android:layout_weight="1"
                     android:hint="http://.../playlist.m3u"
-                    android:paddingStart="14dp"
-                    android:paddingEnd="14dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
                     android:singleLine="true"
-                    android:textSize="14sp" />
+                    android:textSize="13sp" />
 
                 <Button
                     android:id="@+id/btnSaveM3u"
-                    android:layout_width="115dp"
-                    android:layout_height="50dp"
-                    android:layout_marginStart="10dp"
-                    android:text="СОХРАНИТЬ"
-                    android:textSize="12sp"
+                    android:layout_width="100dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:text="M3U"
+                    android:textSize="11sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/btnRefreshM3u"
-                    android:layout_width="52dp"
-                    android:layout_height="50dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="48dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
                     android:text="↻"
-                    android:textSize="18sp" />
+                    android:textSize="16sp" />
             </LinearLayout>
 
             <TextView
@@ -335,43 +395,43 @@
                 android:layout_height="wrap_content"
                 android:text="Ссылка на телегид EPG (.xml / .gz):"
                 android:textColor="#B0BEC5"
-                android:textSize="14sp" />
+                android:textSize="13sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="24dp"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="18dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <EditText
                     android:id="@+id/etEpgUrl"
                     android:layout_width="0dp"
-                    android:layout_height="50dp"
+                    android:layout_height="44dp"
                     android:layout_weight="1"
-                    android:hint="http://.../epg.xml.gz"
-                    android:paddingStart="14dp"
-                    android:paddingEnd="14dp"
+                    android:hint="https://epg.one/epg.xml.gz"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
                     android:singleLine="true"
-                    android:textSize="14sp" />
+                    android:textSize="13sp" />
 
                 <Button
                     android:id="@+id/btnSaveEpg"
-                    android:layout_width="115dp"
-                    android:layout_height="50dp"
-                    android:layout_marginStart="10dp"
-                    android:text="СОХРАНИТЬ"
-                    android:textSize="12sp"
+                    android:layout_width="100dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:text="EPG"
+                    android:textSize="11sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/btnRefreshEpg"
-                    android:layout_width="52dp"
-                    android:layout_height="50dp"
-                    android:layout_marginStart="8dp"
+                    android:layout_width="48dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
                     android:text="↻"
-                    android:textSize="18sp" />
+                    android:textSize="16sp" />
             </LinearLayout>
 
             <LinearLayout
@@ -382,11 +442,11 @@
 
                 <Button
                     android:id="@+id/btnCloseSettings"
-                    android:layout_width="140dp"
-                    android:layout_height="50dp"
+                    android:layout_width="130dp"
+                    android:layout_height="46dp"
                     android:text="ЗАКРЫТЬ"
                     android:textColor="#ECEFF1"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
