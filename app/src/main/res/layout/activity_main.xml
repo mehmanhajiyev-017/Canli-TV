@@ -210,7 +210,7 @@
             android:textSize="16sp" />
     </LinearLayout>
 
-    <!-- Sağ panel: Numpad (Rəqəmlə kanal seçimi) -->
+    <!-- Sağ panel: Numpad -->
     <LinearLayout
         android:id="@+id/numPadPanel"
         android:layout_width="280dp"
@@ -258,7 +258,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Ayarlar Pəncərəsi (M3U & EPG) -->
+    <!-- Ayarlar Pəncərəsi -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
