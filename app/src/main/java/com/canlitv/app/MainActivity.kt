@@ -278,7 +278,6 @@ class MainActivity : AppCompatActivity() {
         initNumpadButtons()
         initSettingsPanelFocus()
 
-        // Tab keçidləri (M3U vs Xtream)
         btnTabXtream.setOnClickListener {
             layoutXtreamForm.visibility = View.VISIBLE
             layoutM3uForm.visibility = View.GONE
