@@ -337,15 +337,21 @@ class MainActivity : AppCompatActivity() {
         recyclerViewCategories.itemAnimator = null
 
         btnSaveXtream.setOnClickListener {
-            val server = etXtreamServer.text.toString().trim().removeSuffix("/")
+            var server = etXtreamServer.text.toString().trim().removeSuffix("/")
             val user = etXtreamUser.text.toString().trim()
             val pass = etXtreamPass.text.toString().trim()
+            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
 
-            if (server.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
+            if (server.isEmpty() && user.isEmpty() && pass.isEmpty()) {
+                prefs.edit().remove("XTREAM_SERVER").remove("XTREAM_USER").remove("XTREAM_PASS").apply()
+                Toast.makeText(applicationContext, "Xtream məlumatları təmizləndi", Toast.LENGTH_SHORT).show()
+            } else if (server.isNotEmpty() && user.isNotEmpty() && pass.isNotEmpty()) {
+                if (!server.startsWith("http://") && !server.startsWith("https://")) {
+                    server = "http://$server"
+                }
                 val m3uUrl = "$server/get.php?username=$user&password=$pass&type=m3u_plus"
                 val epgUrl = "$server/xmltv.php?username=$user&password=$pass"
 
-                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
                 prefs.edit()
                     .putString("XTREAM_SERVER", server)
                     .putString("XTREAM_USER", user)
@@ -354,26 +360,32 @@ class MainActivity : AppCompatActivity() {
                     .putString("EPG_URL", epgUrl)
                     .apply()
 
+                etM3uUrl.setText(m3uUrl)
+                etEpgUrl.setText(epgUrl)
+
                 closeAllPanels()
                 currentPlayingIndex = -1
                 fetchM3U(m3uUrl, autoPlay = true)
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "Заполните все поля Xtream API", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Zəhmət olmasa bütün Xtream xanalarını doldurun", Toast.LENGTH_SHORT).show()
             }
         }
 
         btnSaveM3u.setOnClickListener {
             val url = etM3uUrl.text.toString().trim()
-            if (url.isNotEmpty() && url.startsWith("http")) {
-                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            if (url.isEmpty()) {
+                prefs.edit().remove("M3U_URL").apply()
+                Toast.makeText(applicationContext, "M3U linki təmizləndi", Toast.LENGTH_SHORT).show()
+            } else if (url.startsWith("http")) {
                 prefs.edit().putString("M3U_URL", url).apply()
                 closeAllPanels()
                 currentPlayingIndex = -1
                 fetchM3U(url, autoPlay = true)
             } else {
-                Toast.makeText(applicationContext, "Введите правильный URL M3U", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Düzgün M3U URL daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -383,20 +395,25 @@ class MainActivity : AppCompatActivity() {
                 closeAllPanels()
                 fetchM3U(url, autoPlay = false)
             } else {
-                Toast.makeText(applicationContext, "Ссылка M3U не введена", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "M3U linki daxil edilməyib", Toast.LENGTH_SHORT).show()
             }
         }
 
         btnSaveEpg.setOnClickListener {
             val epgUrl = etEpgUrl.text.toString().trim()
-            if (epgUrl.isNotEmpty() && epgUrl.startsWith("http")) {
-                val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+            if (epgUrl.isEmpty()) {
+                prefs.edit().remove("EPG_URL").apply()
+                deleteLocalEpgCache()
+                currentProgramsMap.clear()
+                Toast.makeText(applicationContext, "EPG linki təmizləndi", Toast.LENGTH_SHORT).show()
+            } else if (epgUrl.startsWith("http")) {
                 prefs.edit().putString("EPG_URL", epgUrl).apply()
                 closeAllPanels()
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "Введите правильный URL EPG", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Düzgün EPG URL daxil edin", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -407,7 +424,7 @@ class MainActivity : AppCompatActivity() {
                 deleteLocalEpgCache()
                 downloadAndParseEpg(epgUrl)
             } else {
-                Toast.makeText(applicationContext, "Ссылка EPG не введена", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "EPG linki daxil edilməyib", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -591,20 +608,17 @@ class MainActivity : AppCompatActivity() {
         initPlayer()
 
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
-        etXtreamServer.setText(prefs.getString("XTREAM_SERVER", ""))
-        etXtreamUser.setText(prefs.getString("XTREAM_USER", ""))
-        etXtreamPass.setText(prefs.getString("XTREAM_PASS", ""))
+        val savedM3u = prefs.getString("M3U_URL", "") ?: ""
 
-        if (allChannels.isEmpty()) {
-            val savedM3u = prefs.getString("M3U_URL", "") ?: ""
-
-            if (savedM3u.isNotEmpty()) {
+        if (savedM3u.isNotEmpty()) {
+            if (allChannels.isEmpty()) {
                 fetchM3U(savedM3u, autoPlay = true)
             } else {
-                showSettingsDialog()
+                player?.playWhenReady = true
             }
         } else {
-            player?.playWhenReady = true
+            // İLK DƏFƏ SİSTEMƏ DAXİL OLARKƏN AVTOMATİK AYARLAR PƏNCƏRƏSİNİ AÇIR
+            showSettingsDialog()
         }
     }
 
@@ -691,6 +705,9 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         closeAllPanels()
         val prefs = getSharedPreferences("TV_SETTINGS", Context.MODE_PRIVATE)
+        etXtreamServer.setText(prefs.getString("XTREAM_SERVER", ""))
+        etXtreamUser.setText(prefs.getString("XTREAM_USER", ""))
+        etXtreamPass.setText(prefs.getString("XTREAM_PASS", ""))
         etM3uUrl.setText(prefs.getString("M3U_URL", ""))
         etEpgUrl.setText(prefs.getString("EPG_URL", ""))
         linkDialogPanel.visibility = View.VISIBLE
