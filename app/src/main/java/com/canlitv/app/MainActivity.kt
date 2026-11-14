@@ -285,16 +285,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // DÜZƏLİŞ: Настройки düyməsindən yuxarı (DPAD_UP) basanda siyahının başına deyil, sonuncu elementinə keçir (tək-tək yuxarı qalxmaq üçün)
         btnOpenSettings.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                     btnOpenSettings.performClick()
                     return@setOnKeyListener true
-                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                     val catIndex = categories.indexOf(selectedCategory).coerceAtLeast(0)
                     recyclerViewCategories.post {
                         recyclerViewCategories.scrollToPosition(catIndex)
                         val vh = recyclerViewCategories.findViewHolderForAdapterPosition(catIndex)
+                        if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
+                    }
+                    return@setOnKeyListener true
+                } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    val lastPos = (categories.size - 1).coerceAtLeast(0)
+                    recyclerViewCategories.post {
+                        recyclerViewCategories.scrollToPosition(lastPos)
+                        val vh = recyclerViewCategories.findViewHolderForAdapterPosition(lastPos)
                         if (vh != null) vh.itemView.requestFocus() else recyclerViewCategories.requestFocus()
                     }
                     return@setOnKeyListener true
@@ -307,7 +316,7 @@ class MainActivity : AppCompatActivity() {
 
         recyclerViewChannels.layoutManager = LinearLayoutManager(this)
         recyclerViewChannels.setHasFixedSize(true)
-        recyclerViewChannels.setItemViewCacheSize(20)
+        recyclerViewChannels.setItemViewCacheSize(30)
         recyclerViewChannels.itemAnimator = null
 
         recyclerViewChannels.addOnScrollListener(object : RecyclerView.OnScrollListener() {
