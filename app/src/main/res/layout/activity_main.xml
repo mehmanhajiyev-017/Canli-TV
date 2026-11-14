@@ -14,7 +14,7 @@
         android:clickable="false"
         app:use_controller="false" />
 
-    <!-- Status və Sürət Paneli (3x OK klikləndikdə görünür) -->
+    <!-- Status və Sürət Paneli (3x OK) -->
     <LinearLayout
         android:id="@+id/syncStatusCard"
         android:layout_width="wrap_content"
@@ -258,7 +258,7 @@
         </GridLayout>
     </LinearLayout>
 
-    <!-- Ayarlar Pəncərəsi -->
+    <!-- Ayarlar Pəncərəsi (Mərkəzləşdirilmiş və səliqəli) -->
     <RelativeLayout
         android:id="@+id/linkDialogPanel"
         android:layout_width="match_parent"
@@ -272,8 +272,10 @@
 
         <LinearLayout
             android:id="@+id/settingsContainerBox"
-            android:layout_width="700dp"
+            android:layout_width="650dp"
             android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:background="#F7121722"
             android:orientation="vertical"
             android:padding="32dp">
 
